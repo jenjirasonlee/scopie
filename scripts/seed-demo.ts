@@ -258,7 +258,7 @@ async function main() {
   // DEMO posts and metrics for every active demo profile, own and competitor alike.
   const { data: ownAccounts, error: ownError } = await supabase
     .from('social_accounts')
-    .select('id, platform_key, handle')
+    .select('id, platform_key, handle, display_name, business_role')
     .eq('organization_id', org.id)
     .eq('is_active', true);
   if (ownError) throw ownError;
@@ -266,10 +266,13 @@ async function main() {
   let posts = 0;
   let facts = 0;
   for (const account of ownAccounts) {
+    // Competitors, industry accounts and creators are public profiles: public metrics only.
+    const isPublic = account.business_role !== 'owned';
     const demo = generateDemoAccount({
       seed: account.handle ?? account.id,
       platformKey: account.platform_key,
       now,
+      mode: isPublic ? 'public' : 'connected',
     });
     const base = {
       organizationId: org.id,
@@ -283,6 +286,56 @@ async function main() {
       'sync',
     );
     facts += daily.accountMetricsWritten;
+    for (const observation of demo.observations) {
+      const result = await ingest(
+        supabase,
+        { ...base, capturedAt: observation.capturedAt, accountMetrics: observation.metrics },
+        'sync',
+      );
+      facts += result.accountMetricsWritten;
+    }
+    const firstObservation = demo.observations[0]?.capturedAt ?? demo.accountCapturedAt;
+    const { error: observedError } = await supabase
+      .from('social_accounts')
+      .update({
+        first_observed_at: isPublic ? firstObservation : null,
+        last_observed_at: isPublic ? (demo.observations.at(-1)?.capturedAt ?? null) : null,
+        earliest_post_at: demo.earliestPostAt,
+      })
+      .eq('id', account.id);
+    if (observedError) throw observedError;
+    if (isPublic) {
+      // Two DEMO profile versions, so profile changes can be shown.
+      await supabase.from('profile_snapshots').delete().eq('social_account_id', account.id);
+      const middle = demo.observations[Math.floor(demo.observations.length / 2)]?.capturedAt;
+      const { error: snapshotError } = await supabase.from('profile_snapshots').insert([
+        {
+          organization_id: org.id,
+          social_account_id: account.id,
+          observed_at: firstObservation,
+          data_source: 'demo',
+          username: account.handle,
+          display_name: account.display_name,
+          biography: 'DEMO DATA. Fictional profile for local development.',
+          website: 'https://example.com/',
+        },
+        ...(middle
+          ? [
+              {
+                organization_id: org.id,
+                social_account_id: account.id,
+                observed_at: middle,
+                data_source: 'demo' as const,
+                username: account.handle,
+                display_name: account.display_name,
+                biography: 'DEMO DATA. Fictional profile, new autumn range bio.',
+                website: 'https://example.com/autumn',
+              },
+            ]
+          : []),
+      ]);
+      if (snapshotError) throw snapshotError;
+    }
     const seenPosts = new Set<string>();
     for (const capture of demo.captures) {
       const result = await ingest(

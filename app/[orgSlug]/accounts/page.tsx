@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { BUSINESS_ROLE_LABELS } from '@/lib/accounts/labels';
+import { ACCESS_TYPE_HELP, ACCESS_TYPE_LABELS, BUSINESS_ROLE_LABELS } from '@/lib/accounts/labels';
 import { parseAccountFilters } from '@/lib/accounts/filters';
 import { groupByCountry } from '@/lib/accounts/grouping';
 import {
@@ -62,7 +62,7 @@ export default async function AccountsPage({
     <div className="space-y-5">
       <PageHeader
         title="Accounts"
-        description="Social accounts in this organization, grouped by country. Link accounts to Instagram or Facebook in Settings → Connections, or import a CSV."
+        description="Profiles you monitor: your own and competitors, industry accounts and creators. Public Instagram profiles are read through the official API; other data comes from a connection or CSV import."
         actions={
           canManage ? (
             <div className="flex gap-2">
@@ -75,13 +75,22 @@ export default async function AccountsPage({
               <Button asChild>
                 <Link href={`/${orgSlug}/accounts/new`}>
                   <Plus aria-hidden />
-                  Add account
+                  Add profile
                 </Link>
               </Button>
             </div>
           ) : null
         }
       />
+
+      {rawSearch.removed ? (
+        <Alert variant="success">
+          <CheckCircle2 aria-hidden />
+          <AlertDescription>
+            The profile and all data Scopie stored about it were deleted.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {rawSearch.created ? (
         <Alert variant="success">
@@ -178,8 +187,8 @@ export default async function AccountsPage({
                 <TableHead>Country</TableHead>
                 <TableHead>Language</TableHead>
                 <TableHead>Owner</TableHead>
-                <TableHead>Connection</TableHead>
-                <TableHead>Last sync</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Last observed</TableHead>
                 <TableHead>Status</TableHead>
                 {canManage ? <TableHead className="text-right">Actions</TableHead> : null}
               </TableRow>
@@ -241,7 +250,9 @@ function GroupRows({
               </span>
               <span className="text-muted-foreground text-xs">
                 {account.handle ? `@${account.handle}` : 'No handle'}
-                {account.business_role !== 'owned' ? ` · ${BUSINESS_ROLE_LABELS[account.business_role]}` : ''}
+                {account.business_role !== 'owned'
+                  ? ` · ${BUSINESS_ROLE_LABELS[account.business_role]}`
+                  : ''}
               </span>
             </Link>
           </TableCell>
@@ -259,12 +270,24 @@ function GroupRows({
           <TableCell>{account.language ?? '—'}</TableCell>
           <TableCell>{account.owner?.full_name ?? account.owner?.email ?? '—'}</TableCell>
           <TableCell>
-            <ConnectionStatusBadge status={account.connection_status} />
+            {account.connection_status === 'needs_reauth' ||
+            account.connection_status === 'error' ? (
+              <ConnectionStatusBadge status={account.connection_status} />
+            ) : (
+              <Badge
+                variant={account.access_type === 'demo' ? 'demo' : 'outline'}
+                title={ACCESS_TYPE_HELP[account.access_type]}
+              >
+                {ACCESS_TYPE_LABELS[account.access_type].toUpperCase()}
+              </Badge>
+            )}
           </TableCell>
           <TableCell className="text-muted-foreground">
-            {account.last_successful_sync_at
-              ? new Date(account.last_successful_sync_at).toLocaleString('en-GB')
-              : 'Never'}
+            {(account.last_observed_at ?? account.last_successful_sync_at)
+              ? new Date(
+                  (account.last_observed_at ?? account.last_successful_sync_at)!,
+                ).toLocaleString('en-GB')
+              : 'Not yet'}
           </TableCell>
           <TableCell>
             <Badge variant={account.is_active ? 'success' : 'muted'}>

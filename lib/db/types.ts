@@ -703,6 +703,38 @@ isOneToOne: false
       referencedColumns: ["key"]
     }
                   ]
+                },"public_profile_lookups": {
+                  Row: {
+                    "id": number,"looked_up_at": string,"organization_id": string,"platform_key": string,"requested_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: never,"looked_up_at"?: string,"organization_id": string,"platform_key": string,"requested_by"?: string | null
+                  }
+                  Update: {
+                    "id"?: never,"looked_up_at"?: string,"organization_id"?: string,"platform_key"?: string,"requested_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "public_profile_lookups_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "public_profile_lookups_platform_key_fkey"
+      columns: ["platform_key"]
+isOneToOne: false
+      referencedRelation: "platforms"
+      referencedColumns: ["key"]
+    },{
+      foreignKeyName: "public_profile_lookups_requested_by_fkey"
+      columns: ["requested_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"raw_payloads": {
                   Row: {
                     "captured_at": string,"endpoint": string,"id": number,"organization_id": string,"payload": NonNullable<Json>,"sync_run_id": string | null

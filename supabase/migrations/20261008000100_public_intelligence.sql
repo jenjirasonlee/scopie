@@ -644,3 +644,17 @@ grant execute on function public.request_sync(uuid, public.sync_job_type) to aut
 grant execute on function public.set_public_data_viewer(uuid) to authenticated;
 grant execute on function public.clear_public_data_viewer(text, uuid) to authenticated;
 grant execute on function public.remove_profile_and_data(uuid) to authenticated;
+
+-- Add-profile previews call Meta with the organization's viewer account. Each one is
+-- counted here so a busy form can't use up the hourly API limit that syncs depend on.
+-- Only the server (service role) reads or writes it; nothing about the profile is kept.
+create table public.public_profile_lookups (
+  id bigint generated always as identity primary key,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  requested_by uuid references public.profiles (id) on delete set null,
+  platform_key text not null references public.platforms (key),
+  looked_up_at timestamptz not null default now()
+);
+create index public_profile_lookups_org_idx on public.public_profile_lookups (organization_id, looked_up_at desc);
+alter table public.public_profile_lookups enable row level security;
+revoke all on public.public_profile_lookups from anon, authenticated;

@@ -19,24 +19,33 @@ import {
 import { getAccount } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
 import { getOrgContext } from '@/lib/orgs/queries';
-import { getAccountPipeline, listRecentPosts } from '@/lib/pipeline/queries';
-import { RecentPosts, SyncCard } from '@/components/pipeline/account-data-panels';
+import { getAccountPipeline, getObservationHistory, listRecentPosts } from '@/lib/pipeline/queries';
+import {
+  ObservationHistoryCard,
+  RecentPosts,
+  SyncCard,
+} from '@/components/pipeline/account-data-panels';
+import { RemoveProfileCard } from '@/components/public-data/remove-profile-card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export const metadata: Metadata = { title: 'Account' };
 
 export default async function AccountPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orgSlug: string; accountId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { orgSlug, accountId } = await params;
+  const [{ orgSlug, accountId }, search] = await Promise.all([params, searchParams]);
   if (!z.uuid().safeParse(accountId).success) notFound();
   const { org, role } = await getOrgContext(orgSlug);
-  const [account, options, pipeline, posts] = await Promise.all([
+  const [account, options, pipeline, posts, history] = await Promise.all([
     getAccount(org.id, accountId),
     getAccountFormOptions(org.id),
     getAccountPipeline(org.id, accountId),
     listRecentPosts(org.id, accountId),
+    getObservationHistory(org.id, accountId),
   ]);
   if (!account) notFound();
   const canManage = can(role, 'accounts.manage');
@@ -72,9 +81,18 @@ export default async function AccountPage({
         }
       />
 
+      {search.added === '1' ? (
+        <Alert variant="success">
+          <AlertDescription>
+            Added. Scopie makes its first observation on the next sync; history starts then.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-6">
-          <RecentPosts posts={posts} />
+          <ObservationHistoryCard history={history} />
+          <RecentPosts posts={posts} publicOnly={account.access_type !== 'connected'} />
           {canManage ? (
             <AccountForm
               action={updateSocialAccount.bind(null, orgSlug, account.id)}
@@ -142,6 +160,14 @@ export default async function AccountPage({
             earliestPostAt={pipeline.earliestPostAt}
             canManage={canManage}
           />
+          {canManage ? (
+            <RemoveProfileCard
+              orgSlug={orgSlug}
+              accountId={account.id}
+              name={account.display_name}
+              status={typeof search.remove === 'string' ? search.remove : null}
+            />
+          ) : null}
         </div>
       </div>
     </div>
