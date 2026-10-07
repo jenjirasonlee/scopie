@@ -124,8 +124,8 @@ export default async function PublicDataPage({ params }: { params: Promise<{ org
           )}
         </div>
         <p className="text-[13px]">
-          Public YouTube channels are read with a YouTube Data API key set on the server. No
-          account needs to be connected and the channels approve nothing.
+          Public YouTube channels are read with a YouTube Data API key set on the server. No account
+          needs to be connected and the channels approve nothing.
           {youtubeReady
             ? ' YouTube channels you add are observed daily.'
             : ' Until the key is set, YouTube channels you add wait and nothing is read. The setup steps are in docs/PUBLIC_DATA_SETUP.md.'}
