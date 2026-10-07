@@ -144,7 +144,7 @@ test('viewers get a read-only accounts page', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Deactivate' })).toHaveCount(0);
 
   await page.goto(`/${org.slug}/accounts/new`);
-  await expect(page.getByText('Only owners and admins can add social accounts.')).toBeVisible();
+  await expect(page.getByText('Only owners and admins can add profiles.')).toBeVisible();
 });
 
 test('members of one organization get a 404 for another', async ({ page }) => {
