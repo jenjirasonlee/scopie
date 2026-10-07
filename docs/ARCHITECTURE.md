@@ -1,11 +1,13 @@
 # Scopie — Architecture
 
-> Status: Phase 1 (Foundation) and Phase 2 (Real social data pipeline) implemented. Sections marked _planned_ describe later phases.
+> Status: Phase 1 (Foundation) and Phase 2 (Real social data pipeline) implemented. Phase 3 (public profile intelligence) is proposed in [PHASE_3_PLAN.md](PHASE_3_PLAN.md); sections marked _planned_ describe it and later phases.
 > Last updated: 2026-10-07
 
 ## 0. Implementation status
 
-Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Analytics dashboard · 4 Cross-country benchmarking · 5 Content management + calendar · 6 Review + approval · 7 Content strategy · 8 AI analyst + recommendations · 9 Weekly intelligence reports · 10 More platforms (YouTube next, then LinkedIn/TikTok) · 11 Productivity + career intelligence. See ROADMAP.md.
+Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Public profile intelligence · 4 Benchmarking + YouTube · 5 Content management + calendar · 6 Review + approval · 7 Content strategy · 8 AI analyst + recommendations · 9 Weekly intelligence reports · 10 More platforms · 11 Productivity + career intelligence. See ROADMAP.md.
+
+**Product focus (2026-10-07):** Scopie is first a public social intelligence and competitor monitoring tool. Public profiles are observed through official APIs without the owner's authorization; OAuth connections are optional enrichment for CANNA-owned accounts. The core product must work without CANNA Meta Business admin access. See §2a.
 
 What exists in code today:
 
@@ -27,7 +29,7 @@ What exists in code today:
 | DEMO seed: org, accounts, and generated posts and metrics                          | `scripts/seed-demo.ts`, `lib/demo/generate.ts`                                |
 | Unit, database integration and Playwright tests; CI                                | `tests/`, `.github/workflows/ci.yml`                                          |
 
-Not implemented yet: analytics layer and dashboard (Phase 3), benchmarks, content, approvals, strategy, AI, reports, connectors other than Meta, public/competitor data, notifications, Storage uploads, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
+Not implemented yet: public profile observation, analytics layer and dashboard (Phase 3), benchmarks, content, approvals, strategy, AI, reports, connectors other than Meta, public/competitor data, notifications, Storage uploads, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
 
 ## 1. Repository inspection (initial design, before Phase 1)
 
@@ -37,14 +39,29 @@ Not implemented yet: analytics layer and dashboard (Phase 3), benchmarks, conten
 
 ## 2. Goals that drive the architecture
 
-| Goal                                                             | Architectural consequence                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Real data, never faked                                           | Every post and metric row carries `data_source` (`authenticated`, `public`, `imported`, `manual`, `demo`; UI: Live, Public, Imported, Manual, DEMO) and an availability state, and the database enforces who may write which source. Demo data is a first-class, visibly labelled source, not a hack. |
-| Many platforms, all different                                    | Platform logic lives behind a `PlatformAdapter` interface. The core analytics layer never imports platform code.                                                                                                                                                                                      |
-| Multi-tenant from day one                                        | Every tenant-owned table has `organization_id`; Supabase Row Level Security (RLS) enforces isolation in the database, not only in app code.                                                                                                                                                           |
-| Start small (30 accounts), scale later (millions of metric rows) | Append-only metric snapshots, partition-ready tables, daily rollup tables, background sync jobs, cursor pagination.                                                                                                                                                                                   |
-| AI that cites evidence                                           | AI never queries raw tables freely. It calls typed, read-only analytics tools that return data plus an evidence reference, and every generation is stored.                                                                                                                                            |
-| Open source, runnable by others                                  | Plain Next.js + Supabase + Trigger.dev, `.env.example`, seed data, docs for every setup step. No CANNA-specific code paths.                                                                                                                                                                           |
+| Goal                                                             | Architectural consequence                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Real data, never faked                                           | Every post and metric row carries `data_source` and an availability state, and the database enforces who may write which source. Today: `authenticated`, `public`, `imported`, `manual`, `demo`. Phase 3 (_planned_): `live_connected`, `live_public`, `imported`, `estimated`, `demo` (UI: CONNECTED, PUBLIC, IMPORTED, ESTIMATED, DEMO). Demo data is a first-class, visibly labelled source. |
+| Many platforms, all different                                    | Platform logic lives behind a `PlatformAdapter` interface. The core analytics layer never imports platform code.                                                                                                                                                                                                                                                                                |
+| Multi-tenant from day one                                        | Every tenant-owned table has `organization_id`; Supabase Row Level Security (RLS) enforces isolation in the database, not only in app code.                                                                                                                                                                                                                                                     |
+| Start small (30 accounts), scale later (millions of metric rows) | Append-only metric snapshots, partition-ready tables, daily rollup tables, background sync jobs, cursor pagination.                                                                                                                                                                                                                                                                             |
+| AI that cites evidence                                           | AI never queries raw tables freely. It calls typed, read-only analytics tools that return data plus an evidence reference, and every generation is stored.                                                                                                                                                                                                                                      |
+| Open source, runnable by others                                  | Plain Next.js + Supabase + Trigger.dev, `.env.example`, seed data, docs for every setup step. No CANNA-specific code paths.                                                                                                                                                                                                                                                                     |
+
+## 2a. Public and connected profiles (_planned, Phase 3_)
+
+| Concept       | Values                                                 | Set by                                                     |
+| ------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| Business role | owned, competitor, industry, influencer, other         | The user                                                   |
+| Access type   | public, connected, imported, demo                      | The system (users can't set it, same rule as D12)          |
+| Provenance    | live_public, live_connected, imported, estimated, demo | The writer of each value; checked by `check_fact_source()` |
+
+- **Public mode** (default): a profile is observed through the platform's official public API. For Instagram that is Business Discovery, called through one _viewer_ account: any Instagram professional account linked to a Facebook Page that the Scopie user manages, connected with the existing Meta connector. Competitors authorize nothing.
+- **Connected mode** (optional): today's Meta OAuth path, limited to `owned` profiles, adds private metrics. A connected profile keeps its public observations so comparisons with competitors stay like for like.
+- **Connectors** declare `publicData` and `privateData` capabilities, each with the metrics it provides. A `PublicProfileCollector` reads public profiles with an app-level credential; the Phase 2 `PlatformAdapter` becomes the `PrivateDataAdapter`. Both write through `ingest()`.
+- **History** is built only from Scopie's own repeated observations. Each profile records first observed, last observed, earliest available post and last sync attempt. Nothing is back-filled or interpolated.
+
+Details, Meta's documented limits and the full change list: [PHASE_3_PLAN.md](PHASE_3_PLAN.md).
 
 ## 3. System overview
 
@@ -187,7 +204,7 @@ Rule: dependencies point downward only. `analytics` never imports `platforms`; `
 
 ### 7.1 Reading the dashboard (_planned, Phase 3_)
 
-1. Server Component calls `analytics.getOverview({ orgId, range, compareTo, filters })`.
+1. Server Component calls `analytics.getOverview({ orgId, range, compareTo, filters })`. Comparisons use one provenance at a time: CANNA is compared with competitors on its `live_public` values even when connected.
 2. That queries the read models (`account_metrics_daily`, `post_metrics_latest`, `post_metrics_at_age`, RLS on) and computes derived metrics such as engagement rate at read time; derived metrics are never stored.
 3. Result includes, per metric: value, previous value, delta, `definition_key`, and source mix (e.g. "28 accounts Live, 2 DEMO").
 4. UI renders `MetricValue` with a definition tooltip and a `SourceBadge`.
@@ -204,6 +221,10 @@ The queue is the `sync_runs` table. Four job types run per connected account: `a
 6. Failures: an auth error sets the connection and its accounts to `needs_reauth` and stops their jobs until reconnected; a rate limit pauses the job until Meta's suggested time; other errors back off 15 min, 30, 60… up to 24 h, and after 3 in a row the account shows "Sync error".
 
 Concurrency: one tick processes the queue sequentially, oldest first, so a token never runs two jobs at once.
+
+### 7.2a Observing a public profile (_planned, Phase 3_)
+
+Three job types run per active public profile on the same `sync_runs` queue: `public_profile_daily` (profile fields, followers, post count, first page of posts), `public_posts_refresh` (every 3 h, snapshots of posts under 31 days old at capture ages 1–30 days) and `public_backfill` (once, back up to 12 months). The viewer token is decrypted only in the worker. A failed observation writes nothing for that day, so charts show a gap. The worker pauses when Meta's `X-App-Usage` passes 80%. See PHASE_3_PLAN.md §7.
 
 ### 7.3 Approving content
 
@@ -277,3 +298,8 @@ Designing for 100+ orgs, thousands of accounts, millions of posts and tens of mi
 | D17 | No `demo` platform; `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`) is the source of connector capabilities and `platforms.connector_status` mirrors it                                             | One source of truth; an integration test checks the mirror.                                                                                                                                                                     |
 | D18 | Reporting timezone per platform (`platforms.reporting_timezone`); Meta daily values are dated `end_time` minus 12 hours                                                                                 | "1 September" means the platform's own day, in both PST and PDT.                                                                                                                                                                |
 | D19 | Sync queue in Postgres (`sync_runs`), driven by a 15-minute tick from Trigger.dev or `pnpm sync:worker`                                                                                                 | Runs anywhere Postgres runs; one active run per account and job by unique index; Trigger.dev is optional.                                                                                                                       |
+| D20 | Public social intelligence is the core product; OAuth connections are optional enrichment (_planned, Phase 3_)                                                                                          | Jen's product decision, 2026-10-07. Scopie must work without CANNA Meta Business admin access.                                                                                                                                  |
+| D21 | Business role and access type are separate fields; `is_competitor` and `primary_data_source` are replaced (_planned_)                                                                                   | A CANNA account can be public or connected; a competitor is always public. One flag couldn't express both.                                                                                                                      |
+| D22 | Provenance values `live_public`, `live_connected`, `imported`, `estimated`, `demo` (_planned_)                                                                                                          | Public observations must never look like connected data; estimates are never shown as live.                                                                                                                                     |
+| D23 | Instagram public data via Business Discovery through a viewer account, using the Phase 2 Meta connector (_planned_)                                                                                     | The only official way to read other professional accounts; no scraping. The viewer can be any professional account the user manages.                                                                                            |
+| D24 | Connectors split into `PublicProfileCollector` and `PrivateDataAdapter`, with declared capabilities (_planned_)                                                                                         | The UI shows only metrics a profile can have; public collection needs no owner token.                                                                                                                                           |
