@@ -146,10 +146,10 @@ async function autoLink(
 ): Promise<number> {
   const { data: accounts, error } = await input.userClient
     .from('social_accounts')
-    .select('id, platform_key, external_id, handle, connection_id, is_competitor')
+    .select('id, platform_key, external_id, handle, connection_id, business_role')
     .eq('organization_id', input.organizationId)
     .in('platform_key', ['instagram', 'facebook'])
-    .eq('is_competitor', false);
+    .eq('business_role', 'owned');
   if (error) throw new Error(`Could not read accounts: ${error.message}`);
 
   let linked = 0;

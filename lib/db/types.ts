@@ -467,14 +467,14 @@ isOneToOne: false
                   ]
                 },"platforms": {
                   Row: {
-                    "connector_status": Database["public"]['Enums']["platform_connector_status"],"key": string,"name": string,"reporting_timezone": string | null,"sort_order": number
+                    "key": string,"name": string,"private_data_status": Database["public"]['Enums']["platform_data_status"],"public_data_status": Database["public"]['Enums']["platform_data_status"],"reporting_timezone": string | null,"sort_order": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "connector_status"?: Database["public"]['Enums']["platform_connector_status"],"key": string,"name": string,"reporting_timezone"?: string | null,"sort_order"?: number
+                    "key": string,"name": string,"private_data_status"?: Database["public"]['Enums']["platform_data_status"],"public_data_status"?: Database["public"]['Enums']["platform_data_status"],"reporting_timezone"?: string | null,"sort_order"?: number
                   }
                   Update: {
-                    "connector_status"?: Database["public"]['Enums']["platform_connector_status"],"key"?: string,"name"?: string,"reporting_timezone"?: string | null,"sort_order"?: number
+                    "key"?: string,"name"?: string,"private_data_status"?: Database["public"]['Enums']["platform_data_status"],"public_data_status"?: Database["public"]['Enums']["platform_data_status"],"reporting_timezone"?: string | null,"sort_order"?: number
                   }
                   Relationships: [
                     
@@ -565,14 +565,14 @@ isOneToOne: false
                   ]
                 },"posts": {
                   Row: {
-                    "campaign_id": string | null,"campaign_source": Database["public"]['Enums']["tag_source"] | null,"caption": string | null,"caption_updated_at": string | null,"content_format_id": string | null,"content_format_source": Database["public"]['Enums']["tag_source"] | null,"country_code": string | null,"created_at": string,"cta_source": Database["public"]['Enums']["tag_source"] | null,"cta_text": string | null,"cta_type_id": string | null,"data_source": Database["public"]['Enums']["data_source"],"external_id": string,"first_fetched_at": string,"id": string,"import_batch_id": string | null,"is_paid": boolean | null,"is_shared_post": boolean,"language": string | null,"language_source": Database["public"]['Enums']["language_source"] | null,"last_fetched_at": string,"last_metrics_at": string | null,"media_format": Database["public"]['Enums']["media_format"],"native_type": string | null,"organization_id": string,"permalink": string | null,"pillar_id": string | null,"pillar_source": Database["public"]['Enums']["tag_source"] | null,"platform_key": string,"published_at": string,"published_local_date": string,"removed_at": string | null,"social_account_id": string,"updated_at": string
+                    "campaign_id": string | null,"campaign_source": Database["public"]['Enums']["tag_source"] | null,"caption": string | null,"caption_updated_at": string | null,"content_format_id": string | null,"content_format_source": Database["public"]['Enums']["tag_source"] | null,"country_code": string | null,"created_at": string,"cta_source": Database["public"]['Enums']["tag_source"] | null,"cta_text": string | null,"cta_type_id": string | null,"data_source": Database["public"]['Enums']["data_source"],"external_id": string,"first_fetched_at": string,"hashtags": (string)[],"id": string,"import_batch_id": string | null,"is_paid": boolean | null,"is_shared_post": boolean,"language": string | null,"language_source": Database["public"]['Enums']["language_source"] | null,"last_fetched_at": string,"last_metrics_at": string | null,"media_format": Database["public"]['Enums']["media_format"],"native_type": string | null,"organization_id": string,"permalink": string | null,"pillar_id": string | null,"pillar_source": Database["public"]['Enums']["tag_source"] | null,"platform_key": string,"published_at": string,"published_local_date": string,"removed_at": string | null,"social_account_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "campaign_id"?: string | null,"campaign_source"?: Database["public"]['Enums']["tag_source"] | null,"caption"?: string | null,"caption_updated_at"?: string | null,"content_format_id"?: string | null,"content_format_source"?: Database["public"]['Enums']["tag_source"] | null,"country_code"?: string | null,"created_at"?: string,"cta_source"?: Database["public"]['Enums']["tag_source"] | null,"cta_text"?: string | null,"cta_type_id"?: string | null,"data_source": Database["public"]['Enums']["data_source"],"external_id": string,"first_fetched_at"?: string,"id"?: string,"import_batch_id"?: string | null,"is_paid"?: boolean | null,"is_shared_post"?: boolean,"language"?: string | null,"language_source"?: Database["public"]['Enums']["language_source"] | null,"last_fetched_at"?: string,"last_metrics_at"?: string | null,"media_format"?: Database["public"]['Enums']["media_format"],"native_type"?: string | null,"organization_id": string,"permalink"?: string | null,"pillar_id"?: string | null,"pillar_source"?: Database["public"]['Enums']["tag_source"] | null,"platform_key": string,"published_at": string,"published_local_date": string,"removed_at"?: string | null,"social_account_id": string,"updated_at"?: string
+                    "campaign_id"?: string | null,"campaign_source"?: Database["public"]['Enums']["tag_source"] | null,"caption"?: string | null,"caption_updated_at"?: string | null,"content_format_id"?: string | null,"content_format_source"?: Database["public"]['Enums']["tag_source"] | null,"country_code"?: string | null,"created_at"?: string,"cta_source"?: Database["public"]['Enums']["tag_source"] | null,"cta_text"?: string | null,"cta_type_id"?: string | null,"data_source": Database["public"]['Enums']["data_source"],"external_id": string,"first_fetched_at"?: string,"hashtags"?: (string)[],"id"?: string,"import_batch_id"?: string | null,"is_paid"?: boolean | null,"is_shared_post"?: boolean,"language"?: string | null,"language_source"?: Database["public"]['Enums']["language_source"] | null,"last_fetched_at"?: string,"last_metrics_at"?: string | null,"media_format"?: Database["public"]['Enums']["media_format"],"native_type"?: string | null,"organization_id": string,"permalink"?: string | null,"pillar_id"?: string | null,"pillar_source"?: Database["public"]['Enums']["tag_source"] | null,"platform_key": string,"published_at": string,"published_local_date": string,"removed_at"?: string | null,"social_account_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "campaign_id"?: string | null,"campaign_source"?: Database["public"]['Enums']["tag_source"] | null,"caption"?: string | null,"caption_updated_at"?: string | null,"content_format_id"?: string | null,"content_format_source"?: Database["public"]['Enums']["tag_source"] | null,"country_code"?: string | null,"created_at"?: string,"cta_source"?: Database["public"]['Enums']["tag_source"] | null,"cta_text"?: string | null,"cta_type_id"?: string | null,"data_source"?: Database["public"]['Enums']["data_source"],"external_id"?: string,"first_fetched_at"?: string,"id"?: string,"import_batch_id"?: string | null,"is_paid"?: boolean | null,"is_shared_post"?: boolean,"language"?: string | null,"language_source"?: Database["public"]['Enums']["language_source"] | null,"last_fetched_at"?: string,"last_metrics_at"?: string | null,"media_format"?: Database["public"]['Enums']["media_format"],"native_type"?: string | null,"organization_id"?: string,"permalink"?: string | null,"pillar_id"?: string | null,"pillar_source"?: Database["public"]['Enums']["tag_source"] | null,"platform_key"?: string,"published_at"?: string,"published_local_date"?: string,"removed_at"?: string | null,"social_account_id"?: string,"updated_at"?: string
+                    "campaign_id"?: string | null,"campaign_source"?: Database["public"]['Enums']["tag_source"] | null,"caption"?: string | null,"caption_updated_at"?: string | null,"content_format_id"?: string | null,"content_format_source"?: Database["public"]['Enums']["tag_source"] | null,"country_code"?: string | null,"created_at"?: string,"cta_source"?: Database["public"]['Enums']["tag_source"] | null,"cta_text"?: string | null,"cta_type_id"?: string | null,"data_source"?: Database["public"]['Enums']["data_source"],"external_id"?: string,"first_fetched_at"?: string,"hashtags"?: (string)[],"id"?: string,"import_batch_id"?: string | null,"is_paid"?: boolean | null,"is_shared_post"?: boolean,"language"?: string | null,"language_source"?: Database["public"]['Enums']["language_source"] | null,"last_fetched_at"?: string,"last_metrics_at"?: string | null,"media_format"?: Database["public"]['Enums']["media_format"],"native_type"?: string | null,"organization_id"?: string,"permalink"?: string | null,"pillar_id"?: string | null,"pillar_source"?: Database["public"]['Enums']["tag_source"] | null,"platform_key"?: string,"published_at"?: string,"published_local_date"?: string,"removed_at"?: string | null,"social_account_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -625,6 +625,32 @@ isOneToOne: false
       referencedColumns: ["id","organization_id","platform_key"]
     }
                   ]
+                },"profile_snapshots": {
+                  Row: {
+                    "account_type": string | null,"biography": string | null,"data_source": Database["public"]['Enums']["data_source"],"display_name": string | null,"id": number,"observed_at": string,"organization_id": string,"profile_picture_url": string | null,"social_account_id": string,"sync_run_id": string | null,"username": string | null,"website": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_type"?: string | null,"biography"?: string | null,"data_source": Database["public"]['Enums']["data_source"],"display_name"?: string | null,"id"?: never,"observed_at": string,"organization_id": string,"profile_picture_url"?: string | null,"social_account_id": string,"sync_run_id"?: string | null,"username"?: string | null,"website"?: string | null
+                  }
+                  Update: {
+                    "account_type"?: string | null,"biography"?: string | null,"data_source"?: Database["public"]['Enums']["data_source"],"display_name"?: string | null,"id"?: never,"observed_at"?: string,"organization_id"?: string,"profile_picture_url"?: string | null,"social_account_id"?: string,"sync_run_id"?: string | null,"username"?: string | null,"website"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "profile_snapshots_social_account_id_organization_id_fkey"
+      columns: ["social_account_id","organization_id"]
+isOneToOne: false
+      referencedRelation: "social_accounts"
+      referencedColumns: ["id","organization_id"]
+    },{
+      foreignKeyName: "profile_snapshots_sync_run_id_fkey"
+      columns: ["sync_run_id"]
+isOneToOne: false
+      referencedRelation: "sync_runs"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"profiles": {
                   Row: {
                     "created_at": string,"email": string,"full_name": string | null,"id": string,"timezone": string | null,"updated_at": string
@@ -638,6 +664,44 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"public_data_viewers": {
+                  Row: {
+                    "connection_asset_id": string,"created_at": string,"created_by": string | null,"organization_id": string,"platform_key": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "connection_asset_id": string,"created_at"?: string,"created_by"?: string | null,"organization_id": string,"platform_key": string
+                  }
+                  Update: {
+                    "connection_asset_id"?: string,"created_at"?: string,"created_by"?: string | null,"organization_id"?: string,"platform_key"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "public_data_viewers_connection_asset_id_fkey"
+      columns: ["connection_asset_id"]
+isOneToOne: false
+      referencedRelation: "connection_assets"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "public_data_viewers_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "public_data_viewers_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "public_data_viewers_platform_key_fkey"
+      columns: ["platform_key"]
+isOneToOne: false
+      referencedRelation: "platforms"
+      referencedColumns: ["key"]
+    }
                   ]
                 },"raw_payloads": {
                   Row: {
@@ -687,14 +751,14 @@ isOneToOne: false
                   ]
                 },"social_accounts": {
                   Row: {
-                    "account_type": string | null,"connection_id": string | null,"connection_status": Database["public"]['Enums']["account_connection_status"],"country_code": string | null,"created_at": string,"created_by": string | null,"display_name": string,"external_id": string | null,"handle": string | null,"history_available_from": string | null,"id": string,"is_active": boolean,"is_competitor": boolean,"language": string | null,"last_successful_sync_at": string | null,"notes": string | null,"organization_id": string,"owner_user_id": string | null,"platform_key": string,"primary_data_source": Database["public"]['Enums']["data_source"],"timezone": string | null,"tracking_started_at": string | null,"updated_at": string
+                    "access_type": Database["public"]['Enums']["profile_access_type"],"account_type": string | null,"business_role": Database["public"]['Enums']["business_role"],"connection_id": string | null,"connection_status": Database["public"]['Enums']["account_connection_status"],"country_code": string | null,"created_at": string,"created_by": string | null,"display_name": string,"earliest_post_at": string | null,"external_id": string | null,"first_observed_at": string | null,"handle": string | null,"history_available_from": string | null,"id": string,"is_active": boolean,"language": string | null,"last_observed_at": string | null,"last_successful_sync_at": string | null,"last_sync_attempt_at": string | null,"notes": string | null,"organization_id": string,"owner_user_id": string | null,"platform_key": string,"timezone": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "account_type"?: string | null,"connection_id"?: string | null,"connection_status"?: Database["public"]['Enums']["account_connection_status"],"country_code"?: string | null,"created_at"?: string,"created_by"?: string | null,"display_name": string,"external_id"?: string | null,"handle"?: string | null,"history_available_from"?: string | null,"id"?: string,"is_active"?: boolean,"is_competitor"?: boolean,"language"?: string | null,"last_successful_sync_at"?: string | null,"notes"?: string | null,"organization_id": string,"owner_user_id"?: string | null,"platform_key": string,"primary_data_source"?: Database["public"]['Enums']["data_source"],"timezone"?: string | null,"tracking_started_at"?: string | null,"updated_at"?: string
+                    "access_type"?: Database["public"]['Enums']["profile_access_type"],"account_type"?: string | null,"business_role"?: Database["public"]['Enums']["business_role"],"connection_id"?: string | null,"connection_status"?: Database["public"]['Enums']["account_connection_status"],"country_code"?: string | null,"created_at"?: string,"created_by"?: string | null,"display_name": string,"earliest_post_at"?: string | null,"external_id"?: string | null,"first_observed_at"?: string | null,"handle"?: string | null,"history_available_from"?: string | null,"id"?: string,"is_active"?: boolean,"language"?: string | null,"last_observed_at"?: string | null,"last_successful_sync_at"?: string | null,"last_sync_attempt_at"?: string | null,"notes"?: string | null,"organization_id": string,"owner_user_id"?: string | null,"platform_key": string,"timezone"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "account_type"?: string | null,"connection_id"?: string | null,"connection_status"?: Database["public"]['Enums']["account_connection_status"],"country_code"?: string | null,"created_at"?: string,"created_by"?: string | null,"display_name"?: string,"external_id"?: string | null,"handle"?: string | null,"history_available_from"?: string | null,"id"?: string,"is_active"?: boolean,"is_competitor"?: boolean,"language"?: string | null,"last_successful_sync_at"?: string | null,"notes"?: string | null,"organization_id"?: string,"owner_user_id"?: string | null,"platform_key"?: string,"primary_data_source"?: Database["public"]['Enums']["data_source"],"timezone"?: string | null,"tracking_started_at"?: string | null,"updated_at"?: string
+                    "access_type"?: Database["public"]['Enums']["profile_access_type"],"account_type"?: string | null,"business_role"?: Database["public"]['Enums']["business_role"],"connection_id"?: string | null,"connection_status"?: Database["public"]['Enums']["account_connection_status"],"country_code"?: string | null,"created_at"?: string,"created_by"?: string | null,"display_name"?: string,"earliest_post_at"?: string | null,"external_id"?: string | null,"first_observed_at"?: string | null,"handle"?: string | null,"history_available_from"?: string | null,"id"?: string,"is_active"?: boolean,"language"?: string | null,"last_observed_at"?: string | null,"last_successful_sync_at"?: string | null,"last_sync_attempt_at"?: string | null,"notes"?: string | null,"organization_id"?: string,"owner_user_id"?: string | null,"platform_key"?: string,"timezone"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -894,6 +958,9 @@ isOneToOne: false
             "check_fact_source":
 { Args: { "account": string,"batch": string,"org": string,"source": Database["public"]['Enums']["data_source"] }; Returns: undefined
                            },
+"clear_public_data_viewer":
+{ Args: { "org": string,"platform": string }; Returns: undefined
+                           },
 "create_organization":
 { Args: { "org_name": string,"org_slug": string,"org_timezone"?: string }; Returns: {
               "created_at": string,
@@ -914,6 +981,9 @@ isOneToOne: false
 "disconnect_platform_connection":
 { Args: { "target": string }; Returns: undefined
                            },
+"extract_hashtags":
+{ Args: { "caption": string }; Returns: (string)[]
+                           },
 "has_org_permission":
 { Args: { "org": string,"permission": string }; Returns: boolean
                            },
@@ -929,8 +999,14 @@ isOneToOne: false
 "org_role_of":
 { Args: { "org": string }; Returns: Database["public"]['Enums']["org_role"]
                            },
+"remove_profile_and_data":
+{ Args: { "account_id": string }; Returns: undefined
+                           },
 "request_sync":
 { Args: { "account_id": string,"job"?: Database["public"]['Enums']["sync_job_type"] }; Returns: string
+                           },
+"set_public_data_viewer":
+{ Args: { "asset_id": string }; Returns: undefined
                            },
 "shares_org_with":
 { Args: { "other_user": string }; Returns: boolean
@@ -940,7 +1016,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "account_connection_status": "not_connected"|"connected"|"needs_reauth"|"error"|"demo","connection_status": "active"|"needs_reauth"|"revoked"|"error","data_source": "authenticated"|"public"|"manual"|"imported"|"demo","import_kind": "account_metrics"|"posts","import_status": "processing"|"completed"|"completed_with_errors"|"failed","language_source": "declared"|"account_default"|"detected","media_format": "image"|"carousel"|"short_video"|"long_video"|"video"|"text"|"link"|"story"|"live"|"other","metric_aggregation": "sum"|"last"|"recompute"|"not_additive","metric_availability": "available"|"not_permitted"|"not_applicable"|"pending"|"error","metric_period": "lifetime"|"day","metric_scope": "account"|"post","metric_unit": "count"|"percent"|"seconds","org_role": "OWNER"|"ADMIN"|"MANAGER"|"EDITOR"|"VIEWER","platform_connector_status": "available"|"planned"|"demo_only","sync_job_type": "account_daily"|"posts_incremental"|"post_metrics_refresh"|"backfill","sync_status": "queued"|"running"|"succeeded"|"partial"|"failed"|"cancelled","sync_trigger": "schedule"|"manual"|"retry","tag_source": "content_item"|"manual"|"imported"|"ai_suggested"|"ai_confirmed"
+            "account_connection_status": "not_connected"|"connected"|"needs_reauth"|"error"|"demo","business_role": "owned"|"competitor"|"industry"|"influencer"|"other","connection_status": "active"|"needs_reauth"|"revoked"|"error","data_source": "live_public"|"live_connected"|"imported"|"estimated"|"demo","import_kind": "account_metrics"|"posts","import_status": "processing"|"completed"|"completed_with_errors"|"failed","language_source": "declared"|"account_default"|"detected","media_format": "image"|"carousel"|"short_video"|"long_video"|"video"|"text"|"link"|"story"|"live"|"other","metric_aggregation": "sum"|"last"|"recompute"|"not_additive","metric_availability": "available"|"not_permitted"|"not_applicable"|"pending"|"error"|"hidden_by_owner"|"not_public","metric_period": "lifetime"|"day","metric_scope": "account"|"post","metric_unit": "count"|"percent"|"seconds","org_role": "OWNER"|"ADMIN"|"MANAGER"|"EDITOR"|"VIEWER","platform_data_status": "available"|"planned"|"not_available","profile_access_type": "public"|"connected"|"imported"|"demo","sync_job_type": "account_daily"|"posts_incremental"|"post_metrics_refresh"|"backfill"|"public_profile_daily"|"public_posts_refresh"|"public_backfill","sync_status": "queued"|"running"|"succeeded"|"partial"|"failed"|"cancelled","sync_trigger": "schedule"|"manual"|"retry","tag_source": "content_item"|"manual"|"imported"|"ai_suggested"|"ai_confirmed"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1056,7 +1132,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "account_connection_status": ["not_connected", "connected", "needs_reauth", "error", "demo"],"connection_status": ["active", "needs_reauth", "revoked", "error"],"data_source": ["authenticated", "public", "manual", "imported", "demo"],"import_kind": ["account_metrics", "posts"],"import_status": ["processing", "completed", "completed_with_errors", "failed"],"language_source": ["declared", "account_default", "detected"],"media_format": ["image", "carousel", "short_video", "long_video", "video", "text", "link", "story", "live", "other"],"metric_aggregation": ["sum", "last", "recompute", "not_additive"],"metric_availability": ["available", "not_permitted", "not_applicable", "pending", "error"],"metric_period": ["lifetime", "day"],"metric_scope": ["account", "post"],"metric_unit": ["count", "percent", "seconds"],"org_role": ["OWNER", "ADMIN", "MANAGER", "EDITOR", "VIEWER"],"platform_connector_status": ["available", "planned", "demo_only"],"sync_job_type": ["account_daily", "posts_incremental", "post_metrics_refresh", "backfill"],"sync_status": ["queued", "running", "succeeded", "partial", "failed", "cancelled"],"sync_trigger": ["schedule", "manual", "retry"],"tag_source": ["content_item", "manual", "imported", "ai_suggested", "ai_confirmed"]
+            "account_connection_status": ["not_connected", "connected", "needs_reauth", "error", "demo"],"business_role": ["owned", "competitor", "industry", "influencer", "other"],"connection_status": ["active", "needs_reauth", "revoked", "error"],"data_source": ["live_public", "live_connected", "imported", "estimated", "demo"],"import_kind": ["account_metrics", "posts"],"import_status": ["processing", "completed", "completed_with_errors", "failed"],"language_source": ["declared", "account_default", "detected"],"media_format": ["image", "carousel", "short_video", "long_video", "video", "text", "link", "story", "live", "other"],"metric_aggregation": ["sum", "last", "recompute", "not_additive"],"metric_availability": ["available", "not_permitted", "not_applicable", "pending", "error", "hidden_by_owner", "not_public"],"metric_period": ["lifetime", "day"],"metric_scope": ["account", "post"],"metric_unit": ["count", "percent", "seconds"],"org_role": ["OWNER", "ADMIN", "MANAGER", "EDITOR", "VIEWER"],"platform_data_status": ["available", "planned", "not_available"],"profile_access_type": ["public", "connected", "imported", "demo"],"sync_job_type": ["account_daily", "posts_incremental", "post_metrics_refresh", "backfill", "public_profile_daily", "public_posts_refresh", "public_backfill"],"sync_status": ["queued", "running", "succeeded", "partial", "failed", "cancelled"],"sync_trigger": ["schedule", "manual", "retry"],"tag_source": ["content_item", "manual", "imported", "ai_suggested", "ai_confirmed"]
           }
         }
 } as const

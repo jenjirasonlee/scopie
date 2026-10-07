@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { BUSINESS_ROLE_LABELS } from '@/lib/accounts/labels';
 import { parseAccountFilters } from '@/lib/accounts/filters';
 import { groupByCountry } from '@/lib/accounts/grouping';
 import {
@@ -240,7 +241,7 @@ function GroupRows({
               </span>
               <span className="text-muted-foreground text-xs">
                 {account.handle ? `@${account.handle}` : 'No handle'}
-                {account.is_competitor ? ' · Competitor' : ''}
+                {account.business_role !== 'owned' ? ` · ${BUSINESS_ROLE_LABELS[account.business_role]}` : ''}
               </span>
             </Link>
           </TableCell>

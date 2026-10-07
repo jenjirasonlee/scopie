@@ -193,7 +193,7 @@ export default async function ConnectionsPage({
                           .filter(
                             (account) =>
                               account.platform_key === asset.platform_key &&
-                              !account.is_competitor &&
+                              account.business_role === 'owned' &&
                               !account.connection_id,
                           )
                           .map((account) => ({

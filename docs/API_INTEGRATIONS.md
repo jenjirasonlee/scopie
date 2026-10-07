@@ -22,7 +22,7 @@ A metric that couldn't be read is stored with an `availability` instead of a val
 
 ```ts
 // lib/platforms/types.ts
-export interface PlatformAdapter {
+export interface PrivateDataAdapter {
   readonly platformKey: string;
   /** Daily account metrics for each complete day in [since, until], plus running totals (e.g. followers) dated asOf. */
   getAccountMetrics(
@@ -197,7 +197,7 @@ Until a platform has a connector, its accounts get data through CSV import (Scop
 
 ## 7. Adding a new platform connector
 
-1. Create `lib/platforms/<provider>/` with an adapter implementing `PlatformAdapter` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
+1. Create `lib/platforms/<provider>/` with an adapter implementing `PrivateDataAdapter` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
 2. Add mappings to `PLATFORM_METRIC_MAP` in `lib/metrics/registry.ts` **and** the same rows to `platform_metric_map` in a migration, each with a `comparability_class`. Add new metrics to both `METRIC_DEFINITIONS` and `metric_definitions`. Integration tests check code and database match.
 3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`) and, in the same migration, set `platforms.connector_status = 'available'` and `reporting_timezone`.
 4. Add connect/callback routes under `app/api/connections/<provider>/` and a `lib/connections/<provider>.ts` that stores tokens only through `connection_credentials`.

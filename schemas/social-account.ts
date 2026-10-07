@@ -14,8 +14,8 @@ export const ACCOUNT_TYPES = [
 const accountTypeValues = ACCOUNT_TYPES.map((type) => type.value) as [string, ...string[]];
 
 /**
- * Fields a person may set on a social account. Connection status, data source
- * and sync time are intentionally absent: only the sync engine sets them.
+ * Fields a person may set on a social account. Access type, connection status and
+ * observation dates are intentionally absent: only the database and sync engine set them.
  */
 export const socialAccountSchema = z.object({
   // A disabled placeholder option isn't submitted, so a missing value must read as "choose" too.
@@ -43,10 +43,9 @@ export const socialAccountSchema = z.object({
   ownerUserId: z
     .union([z.uuid(), z.literal('')])
     .transform((value) => (value === '' ? null : value)),
-  isCompetitor: z
-    .union([z.literal('on'), z.literal('true'), z.literal('false'), z.literal('')])
-    .optional()
-    .transform((value) => value === 'on' || value === 'true'),
+  businessRole: z.enum(['owned', 'competitor', 'industry', 'influencer', 'other'], {
+    error: 'Choose why you track this profile',
+  }),
   notes: optionalText(2000),
 });
 
@@ -64,7 +63,7 @@ export function toSocialAccountRow(values: SocialAccountValues) {
     language: values.language,
     timezone: values.timezone,
     owner_user_id: values.ownerUserId,
-    is_competitor: values.isCompetitor,
+    business_role: values.businessRole,
     notes: values.notes,
   };
 }

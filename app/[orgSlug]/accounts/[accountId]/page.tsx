@@ -10,7 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { updateSocialAccount } from '@/lib/accounts/actions';
 import { getAccountFormOptions } from '@/lib/accounts/form-options';
-import { CONNECTION_STATUS_HELP, DATA_SOURCE_LABELS } from '@/lib/accounts/labels';
+import {
+  ACCESS_TYPE_HELP,
+  ACCESS_TYPE_LABELS,
+  BUSINESS_ROLE_LABELS,
+  CONNECTION_STATUS_HELP,
+} from '@/lib/accounts/labels';
 import { getAccount } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
 import { getOrgContext } from '@/lib/orgs/queries';
@@ -49,7 +54,7 @@ export default async function AccountPage({
             <PlatformMark platformKey={account.platform_key} />
             {platformLabel}
             {account.handle ? <span>· @{account.handle}</span> : null}
-            {account.is_competitor ? <Badge variant="outline">Competitor</Badge> : null}
+            <Badge variant="outline">{BUSINESS_ROLE_LABELS[account.business_role]}</Badge>
             <Badge variant={account.is_active ? 'success' : 'muted'}>
               {account.is_active ? 'Active' : 'Inactive'}
             </Badge>
@@ -85,7 +90,7 @@ export default async function AccountPage({
                 language: account.language,
                 timezone: account.timezone,
                 ownerUserId: account.owner_user_id,
-                isCompetitor: account.is_competitor,
+                businessRole: account.business_role,
                 notes: account.notes,
               }}
               {...options}
@@ -117,8 +122,10 @@ export default async function AccountPage({
                 {CONNECTION_STATUS_HELP[account.connection_status]}
               </p>
               <dl className="grid grid-cols-2 gap-y-2 border-t pt-3">
-                <dt className="text-muted-foreground">Data source</dt>
-                <dd>{DATA_SOURCE_LABELS[account.primary_data_source]}</dd>
+                <dt className="text-muted-foreground">Access</dt>
+                <dd title={ACCESS_TYPE_HELP[account.access_type]}>
+                  {ACCESS_TYPE_LABELS[account.access_type]}
+                </dd>
                 <dt className="text-muted-foreground">Last successful sync</dt>
                 <dd>
                   {account.last_successful_sync_at

@@ -79,7 +79,7 @@ export async function getAccountSummary(orgId: string): Promise<AccountSummary> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('social_accounts')
-    .select('country_code, platform_key, is_active, connection_status, primary_data_source')
+    .select('country_code, platform_key, is_active, connection_status, access_type')
     .eq('organization_id', orgId);
   if (error) throw error;
   return summarizeAccounts(data);
@@ -88,7 +88,7 @@ export async function getAccountSummary(orgId: string): Promise<AccountSummary> 
 export function summarizeAccounts(
   rows: Pick<
     SocialAccount,
-    'country_code' | 'platform_key' | 'is_active' | 'connection_status' | 'primary_data_source'
+    'country_code' | 'platform_key' | 'is_active' | 'connection_status' | 'access_type'
   >[],
 ): AccountSummary {
   const countries = new Map<string | null, number>();
@@ -98,7 +98,7 @@ export function summarizeAccounts(
   let demoCount = 0;
   for (const row of rows) {
     if (row.is_active) active++;
-    if (row.primary_data_source === 'demo') demoCount++;
+    if (row.access_type === 'demo') demoCount++;
     countries.set(row.country_code, (countries.get(row.country_code) ?? 0) + 1);
     platforms.set(row.platform_key, (platforms.get(row.platform_key) ?? 0) + 1);
     byConnection[row.connection_status] = (byConnection[row.connection_status] ?? 0) + 1;

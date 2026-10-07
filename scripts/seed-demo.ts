@@ -82,13 +82,48 @@ const PLATFORMS_BY_MARKET: Record<string, { platform: string; type: string }[]> 
   ],
 };
 
-const COMPETITORS = [
-  { name: 'Hydro Rival (DEMO)', handle: 'hydrorival_demo', platform: 'instagram', country: 'NL' },
+/** Fictional public profiles CANNA watches. Every name says DEMO. */
+const COMPETITORS: {
+  name: string;
+  handle: string;
+  platform: string;
+  country: string;
+  role: 'competitor' | 'industry' | 'influencer';
+}[] = [
+  {
+    name: 'Hydro Rival (DEMO)',
+    handle: 'hydrorival_demo',
+    platform: 'instagram',
+    country: 'NL',
+    role: 'competitor',
+  },
   {
     name: 'GrowCo Example (DEMO)',
     handle: 'growco_example_demo',
     platform: 'instagram',
     country: 'DE',
+    role: 'competitor',
+  },
+  {
+    name: 'Nutrient Labs (DEMO)',
+    handle: 'nutrientlabs_demo',
+    platform: 'instagram',
+    country: 'ES',
+    role: 'competitor',
+  },
+  {
+    name: 'Garden Trade Weekly (DEMO)',
+    handle: 'gardentrade_demo',
+    platform: 'instagram',
+    country: 'GB',
+    role: 'industry',
+  },
+  {
+    name: 'Green Thumb Creator (DEMO)',
+    handle: 'greenthumb_creator_demo',
+    platform: 'instagram',
+    country: 'US',
+    role: 'influencer',
   },
 ];
 
@@ -172,7 +207,7 @@ async function main() {
         timezone: market.timezone,
         owner_user_id: ownerId,
         connection_status: 'demo',
-        primary_data_source: 'demo',
+        business_role: 'owned',
         notes: 'DEMO DATA. Fictional account for local development.',
       });
     }
@@ -185,9 +220,8 @@ async function main() {
       handle: competitor.handle,
       account_type: 'business',
       country_code: competitor.country,
-      is_competitor: true,
+      business_role: competitor.role,
       connection_status: 'demo',
-      primary_data_source: 'demo',
       notes: 'DEMO DATA. Fictional competitor for local development.',
     });
   }
@@ -202,7 +236,6 @@ async function main() {
     language: 'en',
     is_active: false,
     connection_status: 'demo',
-    primary_data_source: 'demo',
     notes: 'DEMO DATA. Inactive example account.',
   });
 
@@ -222,12 +255,11 @@ async function main() {
     if (!existing) created++;
   }
 
-  // DEMO posts and metrics for the organization's own active accounts.
+  // DEMO posts and metrics for every active demo profile, own and competitor alike.
   const { data: ownAccounts, error: ownError } = await supabase
     .from('social_accounts')
     .select('id, platform_key, handle')
     .eq('organization_id', org.id)
-    .eq('is_competitor', false)
     .eq('is_active', true);
   if (ownError) throw ownError;
   const now = new Date();

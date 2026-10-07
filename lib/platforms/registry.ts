@@ -1,10 +1,11 @@
 import type { GraphClientOptions } from './meta/graph';
+import { InstagramPublicCollector } from './meta/business-discovery';
 import { FacebookAdapter } from './meta/facebook';
 import { InstagramAdapter } from './meta/instagram';
-import type { PlatformAdapter } from './types';
+import type { PrivateDataAdapter, PublicProfileCollector } from './types';
 
 /**
- * Platforms with a live API connector. Every other platform gets data through CSV
+ * Platforms with a live connector for owner-authorized (private) data. Every other platform gets data through CSV
  * import until its connector is built (docs/API_INTEGRATIONS.md §6).
  */
 export const CONNECTED_PLATFORMS = ['instagram', 'facebook'] as const;
@@ -22,7 +23,7 @@ export function hasConnector(platformKey: string): boolean {
 export function createAdapter(
   platformKey: string,
   options: GraphClientOptions = {},
-): PlatformAdapter | null {
+): PrivateDataAdapter | null {
   switch (platformKey) {
     case 'instagram':
       return new InstagramAdapter(options);
@@ -31,4 +32,21 @@ export function createAdapter(
     default:
       return null;
   }
+}
+
+/**
+ * Platforms whose public profiles Scopie can read without the owner's authorization,
+ * through an official API. Mirrors platforms.public_data_status = 'available'.
+ */
+export const PUBLIC_DATA_PLATFORMS = ['instagram'] as const;
+
+export function hasPublicCollector(platformKey: string): boolean {
+  return (PUBLIC_DATA_PLATFORMS as readonly string[]).includes(platformKey);
+}
+
+export function createPublicCollector(
+  platformKey: string,
+  options: GraphClientOptions = {},
+): PublicProfileCollector | null {
+  return platformKey === 'instagram' ? new InstagramPublicCollector(options) : null;
 }

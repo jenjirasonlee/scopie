@@ -1,7 +1,14 @@
 import type { Json, Tables } from '@/lib/db/types';
 import { ingest, type Db, type IngestResult } from '@/lib/ingest/ingest';
 import { AuthError, PlatformError, RateLimitError } from '@/lib/platforms/errors';
-import type { AccountContext, NormalizedPost, PlatformAdapter } from '@/lib/platforms/types';
+import type {
+  AccountContext,
+  NormalizedPost,
+  PrivateDataAdapter,
+  PublicContext,
+  PublicProfileCollector,
+} from '@/lib/platforms/types';
+import { runPublicJob } from './public-jobs';
 import {
   ACCOUNT_RESYNC_DAYS,
   FAILURES_BEFORE_ERROR_STATUS,
@@ -12,6 +19,7 @@ import {
   MAX_POSTS_PER_REFRESH,
   METRICS_BATCH_SIZE,
   backoffMinutes,
+  isPublicJob,
   isSnapshotDue,
   isoDay,
   shiftDay,
@@ -23,8 +31,11 @@ type SyncState = Tables<'sync_state'>;
 
 export type EngineDeps = {
   db: Db;
-  adapterFor: (platformKey: string) => PlatformAdapter | null;
+  adapterFor: (platformKey: string) => PrivateDataAdapter | null;
   contextFor: (account: Account) => Promise<AccountContext>;
+  /** Public data (PHASE_3_PLAN.md §6). Optional, so connected-only setups still work. */
+  collectorFor?: (platformKey: string) => PublicProfileCollector | null;
+  publicContextFor?: (organizationId: string, platformKey: string) => Promise<PublicContext>;
   now?: () => Date;
 };
 
@@ -128,18 +139,19 @@ export async function runSyncJob(deps: EngineDeps, runId: string): Promise<RunOu
     completed: false,
   };
   state.last_attempt_at = now().toISOString();
+  await db
+    .from('social_accounts')
+    .update({ last_sync_attempt_at: state.last_attempt_at })
+    .eq('id', account.id);
 
+  const publicJob = isPublicJob(run.job_type);
   let outcome: RunOutcome;
   try {
-    const adapter = deps.adapterFor(account.platform_key);
-    if (!adapter)
-      throw new PlatformError(`No connector for ${account.platform_key}`, 'no_connector');
-    if (!account.connection_id || !account.is_active) {
-      throw new PlatformError('The account is not active and connected', 'not_connected');
+    if (publicJob) {
+      await runPublicJob(deps, run, account, state, log, now);
+    } else {
+      await runConnectedJob(deps, run, account, state, log, now);
     }
-    const ctx = await deps.contextFor(account);
-    const job = new JobContext(deps, run, account, state, adapter, ctx, log, now);
-    await job.execute();
 
     state.last_success_at = now().toISOString();
     state.consecutive_failures = 0;
@@ -149,15 +161,18 @@ export async function runSyncJob(deps: EngineDeps, runId: string): Promise<RunOu
       processed: log.processed,
       failed: log.failed,
     };
-    await db
-      .from('social_accounts')
-      .update({
-        last_successful_sync_at: now().toISOString(),
-        ...(account.connection_status === 'error'
-          ? { connection_status: 'connected' as const }
-          : {}),
-      })
-      .eq('id', account.id);
+    // last_successful_sync_at describes the owner connection; public reads use last_observed_at.
+    if (!publicJob) {
+      await db
+        .from('social_accounts')
+        .update({
+          last_successful_sync_at: now().toISOString(),
+          ...(account.connection_status === 'error'
+            ? { connection_status: 'connected' as const }
+            : {}),
+        })
+        .eq('id', account.id);
+    }
   } catch (error) {
     outcome = await handleFailure(deps, run, account, state, log, error, now);
   }
@@ -178,6 +193,24 @@ export async function runSyncJob(deps: EngineDeps, runId: string): Promise<RunOu
   return outcome;
 }
 
+async function runConnectedJob(
+  deps: EngineDeps,
+  run: SyncRun,
+  account: Account,
+  state: SyncState,
+  log: RunLog,
+  now: () => Date,
+) {
+  const adapter = deps.adapterFor(account.platform_key);
+  if (!adapter) throw new PlatformError(`No connector for ${account.platform_key}`, 'no_connector');
+  if (!account.connection_id || !account.is_active) {
+    throw new PlatformError('The account is not active and connected', 'not_connected');
+  }
+  const ctx = await deps.contextFor(account);
+  const job = new JobContext(deps, run, account, state, adapter, ctx, log, now);
+  await job.execute();
+}
+
 async function handleFailure(
   deps: EngineDeps,
   run: SyncRun,
@@ -193,7 +226,8 @@ async function handleFailure(
   log.lastErrorMessage = message;
   log.event('error', code, message);
 
-  if (error instanceof AuthError) {
+  // A public job's auth failure is the viewer's, already handled in runPublicJob.
+  if (error instanceof AuthError && !isPublicJob(run.job_type)) {
     // Stop everything for this connection until someone reconnects.
     if (account.connection_id) {
       await db
@@ -225,6 +259,7 @@ async function handleFailure(
     now().getTime() + backoffMinutes(state.consecutive_failures) * 60_000,
   ).toISOString();
   if (
+    !isPublicJob(run.job_type) &&
     state.consecutive_failures >= FAILURES_BEFORE_ERROR_STATUS &&
     account.connection_status === 'connected'
   ) {
@@ -244,7 +279,7 @@ class JobContext {
     private readonly run: SyncRun,
     private readonly account: Account,
     private readonly state: SyncState,
-    private readonly adapter: PlatformAdapter,
+    private readonly adapter: PrivateDataAdapter,
     private readonly ctx: AccountContext,
     private readonly log: RunLog,
     private readonly now: () => Date,
@@ -264,6 +299,8 @@ class JobContext {
         return this.postMetricsRefresh();
       case 'backfill':
         return this.backfill();
+      default:
+        throw new PlatformError(`${this.run.job_type} is not a connected job`, 'invalid_job');
     }
   }
 
@@ -280,7 +317,7 @@ class JobContext {
         organizationId: this.account.organization_id,
         socialAccountId: this.account.id,
         platformKey: this.account.platform_key,
-        dataSource: 'authenticated',
+        dataSource: 'live_connected',
         syncRunId: this.run.id,
       },
       'sync',

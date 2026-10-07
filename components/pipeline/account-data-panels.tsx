@@ -35,7 +35,7 @@ export function SyncCard({
       <CardContent className="space-y-3 text-[13px]">
         <dl className="grid grid-cols-2 gap-y-2">
           <dt className="text-muted-foreground">Tracking since</dt>
-          <dd>{account.tracking_started_at ? date(account.tracking_started_at) : '—'}</dd>
+          <dd>{account.first_observed_at ? date(account.first_observed_at) : '—'}</dd>
           <dt className="text-muted-foreground">Oldest post stored</dt>
           <dd>{earliestPostAt ? date(earliestPostAt) : '—'}</dd>
           {account.history_available_from ? (

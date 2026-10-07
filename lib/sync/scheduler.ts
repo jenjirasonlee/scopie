@@ -1,44 +1,78 @@
 import type { Db } from '@/lib/ingest/ingest';
-import { hasConnector } from '@/lib/platforms/registry';
+import { hasConnector, hasPublicCollector } from '@/lib/platforms/registry';
 import { runSyncJob, type EngineDeps, type RunOutcome } from './engine';
-import { JOB_INTERVAL_MINUTES, type SyncJobType } from './schedule';
+import {
+  CONNECTED_JOBS,
+  JOB_INTERVAL_MINUTES,
+  PUBLIC_JOBS,
+  isPublicJob,
+  type SyncJobType,
+} from './schedule';
 
-const JOB_TYPES = Object.keys(JOB_INTERVAL_MINUTES) as SyncJobType[];
+type DueAccount = { id: string; organization_id: string; platform_key: string };
 
 /**
- * Queues the jobs that are due for every active, connected account. Safe to call as
- * often as you like: the database allows one queued or running job per account and
- * job type, so a second call adds nothing.
+ * Queues the jobs that are due. Two passes: connected jobs for accounts linked to an active
+ * owner connection, and public jobs for every active profile on a platform with public data,
+ * in organizations that set up a viewer account. A connected Instagram account gets both,
+ * so it can be compared with competitors on the same public numbers. Safe to call as often
+ * as you like: the database allows one queued or running job per account and job type.
  */
 export async function enqueueDueJobs(db: Db, now: Date = new Date()): Promise<number> {
-  const { data: accounts, error } = await db
+  const { data: connected, error } = await db
     .from('social_accounts')
-    .select('id, organization_id, platform_key, connection_id, platform_connections!inner(status)')
+    .select('id, organization_id, platform_key, platform_connections!inner(status)')
     .eq('is_active', true)
-    .eq('is_competitor', false)
     .not('connection_id', 'is', null)
     .eq('platform_connections.status', 'active');
   if (error) throw new Error(`Could not list accounts: ${error.message}`);
-  const eligible = accounts.filter((account) => hasConnector(account.platform_key));
-  if (!eligible.length) return 0;
 
+  const { data: viewers, error: viewerError } = await db
+    .from('public_data_viewers')
+    .select('organization_id, platform_key');
+  if (viewerError) throw new Error(`Could not list viewer accounts: ${viewerError.message}`);
+  let publicProfiles: DueAccount[] = [];
+  if (viewers.length) {
+    const { data, error: publicError } = await db
+      .from('social_accounts')
+      .select('id, organization_id, platform_key, platforms!inner(public_data_status)')
+      .eq('is_active', true)
+      .not('handle', 'is', null)
+      .neq('access_type', 'demo')
+      .eq('platforms.public_data_status', 'available')
+      .in('organization_id', [...new Set(viewers.map((viewer) => viewer.organization_id))]);
+    if (publicError) throw new Error(`Could not list public profiles: ${publicError.message}`);
+    const hasViewer = new Set(viewers.map((v) => `${v.organization_id}:${v.platform_key}`));
+    publicProfiles = data.filter(
+      (account) =>
+        hasPublicCollector(account.platform_key) &&
+        hasViewer.has(`${account.organization_id}:${account.platform_key}`),
+    );
+  }
+
+  const candidates: { account: DueAccount; jobs: readonly SyncJobType[] }[] = [
+    ...connected
+      .filter((account) => hasConnector(account.platform_key))
+      .map((account) => ({ account, jobs: CONNECTED_JOBS })),
+    ...publicProfiles.map((account) => ({ account, jobs: PUBLIC_JOBS })),
+  ];
+  if (!candidates.length) return 0;
+
+  const ids = [...new Set(candidates.map(({ account }) => account.id))];
   const { data: states, error: stateError } = await db
     .from('sync_state')
     .select('social_account_id, job_type, last_attempt_at, next_run_after, completed')
-    .in(
-      'social_account_id',
-      eligible.map((account) => account.id),
-    );
+    .in('social_account_id', ids);
   if (stateError) throw new Error(`Could not read sync state: ${stateError.message}`);
   const stateFor = new Map(
     states.map((state) => [`${state.social_account_id}:${state.job_type}`, state]),
   );
 
   const rows = [];
-  for (const account of eligible) {
-    for (const jobType of JOB_TYPES) {
+  for (const { account, jobs } of candidates) {
+    for (const jobType of jobs) {
       const state = stateFor.get(`${account.id}:${jobType}`);
-      if (jobType === 'backfill' && state?.completed) continue;
+      if ((jobType === 'backfill' || jobType === 'public_backfill') && state?.completed) continue;
       if (state?.next_run_after && Date.parse(state.next_run_after) > now.getTime()) continue;
       const intervalMs = JOB_INTERVAL_MINUTES[jobType] * 60_000;
       if (state?.last_attempt_at && now.getTime() - Date.parse(state.last_attempt_at) < intervalMs)
@@ -71,14 +105,19 @@ export async function processQueue(
 ): Promise<{ runId: string; outcome: RunOutcome }[]> {
   const { data: queued, error } = await deps.db
     .from('sync_runs')
-    .select('id')
+    .select('id, job_type')
     .eq('status', 'queued')
     .order('queued_at', { ascending: true })
     .limit(options.limit ?? 50);
   if (error) throw new Error(`Could not read the sync queue: ${error.message}`);
   const results = [];
-  for (const { id } of queued) {
-    results.push({ runId: id, outcome: await runSyncJob(deps, id) });
+  let publicPaused = false;
+  for (const { id, job_type } of queued) {
+    // Once Meta reports the app near its hourly limit, public jobs wait for a later tick.
+    if (publicPaused && isPublicJob(job_type)) continue;
+    const outcome = await runSyncJob(deps, id);
+    if (outcome.errorCode === 'usage_paused') publicPaused = true;
+    results.push({ runId: id, outcome });
   }
   return results;
 }

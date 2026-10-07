@@ -11,6 +11,7 @@ const valid = {
   language: 'de',
   timezone: 'Europe/Berlin',
   ownerUserId: '',
+  businessRole: 'owned',
   notes: '',
 };
 
@@ -23,12 +24,18 @@ describe('social account validation', () => {
       externalId: null,
       ownerUserId: null,
       notes: null,
-      isCompetitor: false,
+      businessRole: 'owned',
     });
   });
 
-  it('treats a checked competitor box as true', () => {
-    expect(socialAccountSchema.parse({ ...valid, isCompetitor: 'on' }).isCompetitor).toBe(true);
+  it('accepts the business roles and rejects anything else', () => {
+    expect(socialAccountSchema.parse({ ...valid, businessRole: 'competitor' }).businessRole).toBe(
+      'competitor',
+    );
+    expect(socialAccountSchema.safeParse({ ...valid, businessRole: 'rival' }).success).toBe(false);
+    expect(socialAccountSchema.safeParse({ ...valid, businessRole: undefined }).success).toBe(
+      false,
+    );
   });
 
   it('requires a platform and an account name', () => {

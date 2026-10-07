@@ -8,7 +8,7 @@ import type {
   MetricAvailability,
   NormalizedAccountMetric,
   NormalizedPost,
-  PlatformAdapter,
+  PrivateDataAdapter,
   PostMetricsResult,
   PostPage,
   RawPayload,
@@ -74,7 +74,7 @@ export function facebookMediaFormat(post: z.infer<typeof postSchema>): MediaForm
   return 'other';
 }
 
-export class FacebookAdapter implements PlatformAdapter {
+export class FacebookAdapter implements PrivateDataAdapter {
   readonly platformKey = PLATFORM;
   private readonly graph: GraphClient;
   private raw: RawPayload[] = [];

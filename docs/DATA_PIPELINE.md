@@ -37,7 +37,7 @@ triggers in the data pipeline migration):
 
 ## 2. Adapters
 
-An adapter (`PlatformAdapter`) turns one platform's API into normalized records and never touches the
+An adapter (`PrivateDataAdapter`) turns one platform's API into normalized records and never touches the
 database, so each is tested against saved responses. Platform field names stop at the adapter; the
 mapping from platform metric to Scopie metric lives in `PLATFORM_METRIC_MAP` (`lib/metrics/registry.ts`),
 mirrored in the `platform_metric_map` table.
