@@ -72,7 +72,10 @@ export function SyncCard({
         {(account.connection_id || account.access_type === 'public') && canManage ? (
           <InlineActionForm
             action={requestSync.bind(null, orgSlug)}
-            hidden={{ accountId: account.id }}
+            hidden={{
+              accountId: account.id,
+              job: account.connection_id ? 'posts_incremental' : 'public_profile_daily',
+            }}
             label="Sync now"
             pendingLabel="Queuing…"
           />

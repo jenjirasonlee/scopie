@@ -104,7 +104,7 @@ export type PublicContext = {
   viewerId: string | null;
   /** The viewer's connection, so an auth failure can mark it for reconnecting. */
   connectionId?: string | null;
-  /** Instagram: the viewer connection's user token. YouTube: an API key. Server only. */
+  /** Instagram: the token of the Page the viewer account is linked to. YouTube: an API key. Server only. */
   credential: string;
 };
 

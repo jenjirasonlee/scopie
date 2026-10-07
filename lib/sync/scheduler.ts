@@ -116,7 +116,7 @@ export async function processQueue(
     // Once Meta reports the app near its hourly limit, public jobs wait for a later tick.
     if (publicPaused && isPublicJob(job_type)) continue;
     const outcome = await runSyncJob(deps, id);
-    if (outcome.errorCode === 'usage_paused') publicPaused = true;
+    if (outcome.errorCode === 'usage_paused' || outcome.pausePublic) publicPaused = true;
     results.push({ runId: id, outcome });
   }
   return results;

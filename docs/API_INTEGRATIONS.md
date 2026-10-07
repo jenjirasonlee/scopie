@@ -1,6 +1,6 @@
 # Scopie — Platform Integrations
 
-> Status: the Meta connector (Instagram + Facebook Pages) is built (Phase 2). Other platforms are planned (Phase 10) and get data through CSV import until then. Last updated: 2026-10-07
+> Status: the Meta connector (Instagram + Facebook Pages) is built (Phase 2). Public Instagram data through Business Discovery is built (Phase 3, §4a). YouTube public data is planned for Phase 4; other platforms are planned (Phase 10) and get data through CSV import until then. Last updated: 2026-10-07
 >
 > **Accuracy rule:** platform APIs change often (metric renames, deprecations, access tiers, pricing). Everything below reflects our understanding at the time of writing and is marked **[verify]** where details must be re-checked against the platform's official documentation. Nothing here may be used to fabricate a metric: if the API doesn't return it, Scopie stores it as unavailable, with a reason.
 
@@ -8,15 +8,15 @@
 
 Every stored post and metric carries a `data_source` (DATABASE.md §5.5):
 
-| `data_source`   | Badge      | Meaning                                                                                                                  | How Scopie gets it                                          |
-| --------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
-| `authenticated` | `Live`     | Analytics for accounts the organization owns, authorized by an account admin via OAuth                                   | Platform insights APIs, written only by the sync worker     |
-| `public`        | `Public`   | Data the platform's API makes available about accounts we don't own (e.g. competitor follower counts). **Not built yet** | Official public endpoints only (no scraping)                |
-| `imported`      | `Imported` | Values from a CSV file (platform export or Scopie template)                                                              | Accounts → Import CSV; every row belongs to an import batch |
-| `manual`        | `Manual`   | Typed in by a person                                                                                                     | Reserved; no entry screen yet                               |
-| `demo`          | `DEMO`     | Fictional data for development                                                                                           | `pnpm db:seed`; accepted only in demo organizations         |
+| `data_source`    | Badge       | Meaning                                                                                | How Scopie gets it                                          |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `live_public`    | `PUBLIC`    | Public data about any professional account, read without the owner's authorization     | Official public endpoints only (no scraping); sync worker   |
+| `live_connected` | `CONNECTED` | Analytics for accounts the organization owns, authorized by an account admin via OAuth | Platform insights APIs, written only by the sync worker     |
+| `imported`       | `IMPORTED`  | Values from a CSV file (platform export or Scopie template)                            | Accounts → Import CSV; every row belongs to an import batch |
+| `estimated`      | `ESTIMATED` | Reserved; nothing produces it yet                                                      | —                                                           |
+| `demo`           | `DEMO`      | Fictional data for development                                                         | `pnpm db:seed`; accepted only in demo organizations         |
 
-A metric that couldn't be read is stored with an `availability` instead of a value: `not_permitted` (scope missing or withheld), `not_applicable`, `pending` (the platform hasn't reported that day yet) or `error`. It is never stored as 0.
+A metric that couldn't be read is stored with an `availability` instead of a value: `not_permitted` (scope missing or withheld), `not_applicable`, `hidden_by_owner` (for example hidden like counts), `not_public` (only the owner can see it), `pending` (the platform hasn't reported that day yet) or `error`. It is never stored as 0.
 
 ## 2. Connector contract
 
@@ -47,9 +47,11 @@ export type AccountContext = {
 };
 ```
 
-Adapters never touch the database. The sync engine (`lib/sync/`) builds the `AccountContext` from encrypted credentials, calls the adapter, and writes the normalized records through `ingest()`. That keeps adapters pure and testable against saved responses (`tests/fixtures/meta/`). OAuth (connect, discover accounts, revoke) is separate from the adapter: `lib/platforms/meta/oauth.ts`, orchestrated by `lib/connections/`.
+Public data has its own interface, `PublicProfileCollector`, described in §4a. It reads a profile by handle with an app-level credential (`PublicContext`), never the profile owner's token.
 
-`lib/platforms/registry.ts` is the source of truth for which platforms have a connector (`CONNECTED_PLATFORMS`), which OAuth provider connects each (`PROVIDER_FOR_PLATFORM`) and how to build an adapter (`createAdapter`). The database column `platforms.connector_status` mirrors it, and an integration test checks they match.
+Adapters and collectors never touch the database. The sync engine (`lib/sync/`) builds the `AccountContext` from encrypted credentials, calls the adapter, and writes the normalized records through `ingest()`. That keeps adapters pure and testable against saved responses (`tests/fixtures/meta/`). OAuth (connect, discover accounts, revoke) is separate from the adapter: `lib/platforms/meta/oauth.ts`, orchestrated by `lib/connections/`.
+
+`lib/platforms/registry.ts` is the source of truth for which platforms have a private-data connector (`CONNECTED_PLATFORMS`) and a public collector (`PUBLIC_DATA_PLATFORMS`), which OAuth provider connects each (`PROVIDER_FOR_PLATFORM`), and how to build them (`createAdapter`, `createPublicCollector`). The database columns `platforms.private_data_status` and `platforms.public_data_status` mirror it, and an integration test checks they match.
 
 Normalized metrics always carry `metricKey`, `sourceMetric`, `value | null`, `availability`, `period` (`lifetime` or `day`) and `metricDate`. Platform metric names are translated through `PLATFORM_METRIC_MAP` (`lib/metrics/registry.ts`), mirrored in the `platform_metric_map` table.
 
@@ -66,7 +68,7 @@ Normalized metrics always carry `metricKey`, `sourceMetric`, `value | null`, `av
 | `ValidationError` | Response didn't match the Zod schema     | Not retried; never turned into default values                  |
 | `TransientError`  | Network failure or 5xx after all retries | Job retried later with backoff                                 |
 
-- **`lib/platforms/meta/graph.ts`** — `GraphClient`: pinned Graph API version (`DEFAULT_GRAPH_VERSION = 'v24.0'`, override with `META_GRAPH_API_VERSION`), `appsecret_proof` on every call, and mapping of Graph error codes to the typed errors. Rate-limit waits come from Meta's `X-Business-Use-Case-Usage` / `X-App-Usage` headers (`estimated_time_to_regain_access`), defaulting to 15 minutes.
+- **`lib/platforms/meta/graph.ts`** — `GraphClient`: pinned Graph API version (`DEFAULT_GRAPH_VERSION = 'v24.0'`, override with `META_GRAPH_API_VERSION`), `appsecret_proof` on every call, and mapping of Graph error codes to the typed errors. Rate-limit waits come from Meta's `X-Business-Use-Case-Usage` / `X-App-Usage` headers (`estimated_time_to_regain_access`), defaulting to 15 minutes. `appUsagePercent()` reads the highest of `call_count`, `total_cputime` and `total_time` from `X-App-Usage` after every response, so public jobs can pause before the limit is reached.
 
 Failure handling and the sync schedule are described in [DATA_PIPELINE.md](DATA_PIPELINE.md).
 
@@ -81,7 +83,7 @@ Failure handling and the sync schedule are described in [DATA_PIPELINE.md](DATA_
    - stores the user token and one **Page token per Page** (obtained from the long-lived user token) encrypted in `connection_credentials`; Instagram accounts use their Page's token;
    - records every discovered Page and Instagram account in `connection_assets`;
    - auto-links Scopie accounts that already match (same platform ID, or same Instagram handle for an account without one).
-4. The user is sent back to Settings → Connections with how many accounts were found and linked, and any permissions that weren't granted. Other discovered accounts can be linked to a Scopie account from that page (`link_connection_asset`). Competitor accounts can't be linked.
+4. The user is sent back to Settings → Connections with how many accounts were found and linked, and any permissions that weren't granted. Other discovered accounts can be linked to a Scopie account from that page (`link_connection_asset`). Only profiles with the business role "Own profile" (`owned`) can be linked. A discovered Instagram account can also be chosen as the viewer account for public data (§4a).
 5. The next scheduled sync picks up the linked accounts (or an admin clicks "Sync now").
 
 **Token security.** Tokens are encrypted at rest with AES-256-GCM (`lib/crypto/tokens.ts`, key `SCOPIE_ENCRYPTION_KEY`, versioned for rotation). `connection_credentials` has no RLS policies and all grants revoked, so only the service role (OAuth callback, disconnect, sync worker) can read it. Tokens are never sent to the browser, never logged, and redacted from error messages.
@@ -171,35 +173,92 @@ Daily values use Meta's reporting timezone (Pacific): the report date is `end_ti
 - **Insights history is limited:** the first daily sync asks for 28 days of account metrics; older account metrics can only come from CSV import. The post backfill pulls older posts and records the oldest one reached as `history_available_from`; older posts get one lifetime snapshot at their current age, not early-age values.
 - **Stories** are not collected: Scopie lists posts from the Instagram media endpoint and doesn't poll stories, whose insights are only available for a short time after posting **[verify]**.
 - **Impressions on Instagram** are not collected (Meta replaced them with `views` in 2025); Instagram `views` and Facebook `impressions` are different comparability classes. **Facebook video views** and completion rate are not collected.
-- **No public/competitor data** yet (e.g. Instagram Business Discovery); competitor accounts can only get data by CSV import.
+- **Public data for other accounts** comes from Business Discovery (§4a), with fewer metrics than insights.
 - No audience demographics, no paid/boosted split (`is_paid` stays unknown), no webhooks.
+
+## 4a. Public data: Instagram Business Discovery
+
+Built in Phase 3 (`lib/platforms/meta/business-discovery.ts`). Business Discovery returns public data about other Instagram Business and Creator accounts by username. The account owner authorizes nothing. Scopie uses only fields Meta documents as public, and never scrapes. Plain-language setup: [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md).
+
+Reference: [Business Discovery](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/business_discovery) · [Rate limiting](https://developers.facebook.com/docs/graph-api/overview/rate-limiting)
+
+### Viewer account
+
+Meta requires each request to come from an Instagram professional account of the app user: the **viewer account**. Scopie calls `GET /{viewer-ig-id}?fields=business_discovery.username(<handle>){…}` with the token of the Facebook Page the viewer is linked to.
+
+- Any Instagram Business or Creator account linked to a Facebook Page that the connecting person manages. It doesn't need to be a CANNA brand account; a dedicated research account works. It must be a real, properly operated account.
+- It is connected through the normal **Connect with Meta** flow (§3), then chosen in **Settings → Public data** (`set_public_data_viewer`). One viewer per organization.
+- No CANNA Meta Business admin access is needed.
+- If Meta rejects the viewer's token, its connection becomes "Needs reconnect" and public jobs fail with `viewer_auth` until it is reconnected. Tracked profiles are not marked as broken.
+
+### Permissions and access level
+
+- **Permissions:** Meta's Business Discovery reference lists `instagram_basic`, `instagram_manage_insights` and `pages_read_engagement`, plus `ads_read` or `ads_management` when Page access comes through Business Manager (checked 2026-10-07). The connector already requests the first three (§4). It does not request `ads_read` or `ads_management`; if your Page access comes through Business Manager and lookups fail, that is the first thing to check **[verify]**.
+- **Access level:** **uncertain until a live test.** With Standard Access an app works for people with a role on the app. Whether Standard Access is enough to look up accounts outside the app's role holders, or whether Advanced Access (App Review and Business Verification) is needed, will be confirmed on the first live test. A hosted Scopie serving other companies would need Advanced Access.
+
+### Fields used
+
+| Business Discovery field                                                   | Scopie                           | Notes                                                              |
+| -------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
+| `id`, `username`                                                           | `external_id`, handle            | The id is stored on first observation and checked every time after |
+| `biography`, `website`                                                     | `profile_snapshots`              | A new snapshot only when something changed                         |
+| `name`, `profile_picture_url`                                              | `profile_snapshots`              | Not marked public by Meta; requested, and dropped if Meta refuses  |
+| `followers_count`                                                          | `followers` (`audience_size`)    | Current value only; history is Scopie's own daily observations     |
+| `media_count`                                                              | `posts_total` (`posts_total`)    | Current value only                                                 |
+| `media{id, caption, media_type, media_product_type, permalink, timestamp}` | posts                            | 25 per page, newest first. Hashtags come from the caption          |
+| `media{like_count}`                                                        | `likes` (`likes`)                | Missing when the owner hides likes → `hidden_by_owner`             |
+| `media{comments_count}`                                                    | `comments` (`comments`)          |                                                                    |
+| `media{view_count}`                                                        | `views` (`ig_public_reel_views`) | Reels only (else `not_applicable`); includes paid views            |
+
+Errors: a username that isn't a readable Business or Creator account comes back as an invalid parameter. Scopie retries once without the optional fields, then reports `profile_not_found` and stores nothing.
+
+### Rate limits
+
+Business Discovery counts against the Graph API platform limit: about 200 calls per hour per app user, reported in the `X-App-Usage` header. Scopie:
+
+- pauses public jobs for an hour when `X-App-Usage` reaches 80%, keeping what was saved, and skips the remaining public jobs in that worker pass;
+- limits add-profile previews to 30 per organization per hour;
+- spends about 30 daily calls plus about 240 refresh calls for 30 profiles, plus a one-off backfill of up to 20 pages per profile (see [DATA_PIPELINE.md](DATA_PIPELINE.md) §3.1).
+
+### Not available
+
+| Data                                              | Why                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| Personal and age-restricted accounts              | Business Discovery returns only Business and Creator accounts       |
+| Reach, impressions, saves, shares, profile visits | Insights; only the account owner can read them                      |
+| Audience demographics                             | Insights                                                            |
+| Following count                                   | Not marked public                                                   |
+| Comment text                                      | The comments edge isn't public                                      |
+| Stories                                           | Not returned by Business Discovery                                  |
+| Follower history and earlier post metrics         | Only current totals; Scopie builds history from the day it is added |
+| Hashtag search                                    | Needs Meta's Instagram Public Content Access feature (Phase 10)     |
 
 ## 5. DEMO data
 
-There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics, and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
+There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics (connected-style for own profiles, Business Discovery-style for public ones), and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
 
 ## 6. Platform capability matrix (planning)
 
 Legend: ✓ available · ◐ limited / approval needed · ✗ not available via official API · ? to verify
 
-| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                                                                                                                                                                      | Access hurdle                                                                         | Phase                     |
-| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------- |
-| Instagram      | Meta OAuth             | ✓ built: reach, views, interactions, likes, comments, shares, saves, followers, Reels watch time (§4)                                   | ✓ Business Discovery through a viewer account: followers, post count, bio, website, posts with link, caption, time, type, likes (unless hidden), comment count, Reel views. Checked 2026-10-07; see PHASE_3_PLAN.md §2 (Phase 3, not built) | Pro account + Facebook Page for the viewer; App Review only to serve other businesses | **2 ✅**, public: 3       |
-| Facebook Pages | Meta OAuth             | ✓ built: followers, Page reach and engagements, post reactions/comments/shares/reach/impressions/clicks (subject to Meta deprecations)  | ◐ limited public Page fields (not built)                                                                                                                                                                                                    | Page role; App Review for other businesses                                            | **2 ✅**                  |
-| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: channel subscriber count (rounded), video views/likes/comments                                                                                                                                                                  | Daily quota (10,000 units); public data needs only an API key                         | 4 (public)                |
-| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                                                                                                                                                                 | Partner application/approval                                                          | 10; CSV import until then |
-| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ (Research API is for academic research, not usable here)                                                                                                                                                                                  | App review                                                                            | 10                        |
-| X              | OAuth 2.0              | ◐ public + (own, recent) non-public tweet metrics                                                                                       | ◐ public metrics                                                                                                                                                                                                                            | Paid API tier required                                                                | later (optional)          |
-| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data                                                                                                                                                                                                                          | Commercial use terms                                                                  | later                     |
-| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                                                                                                                                                                           | Bot added by server admin; Server Insights not in public API **[verify]**             | later                     |
+| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                                                                                                                                  | Access hurdle                                                                         | Phase                      |
+| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------- |
+| Instagram      | Meta OAuth             | ✓ built: reach, views, interactions, likes, comments, shares, saves, followers, Reels watch time (§4)                                   | ✓ Business Discovery through a viewer account: followers, post count, bio, website, posts with link, caption, time, type, likes (unless hidden), comment count, Reel views. Checked 2026-10-07; see §4a | Pro account + Facebook Page for the viewer; App Review only to serve other businesses | **2 ✅**, public: **3 ✅** |
+| Facebook Pages | Meta OAuth             | ✓ built: followers, Page reach and engagements, post reactions/comments/shares/reach/impressions/clicks (subject to Meta deprecations)  | ◐ limited public Page fields (not built)                                                                                                                                                                | Page role; App Review for other businesses                                            | **2 ✅**                   |
+| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: channel subscriber count (rounded), video views/likes/comments                                                                                                                              | Daily quota (10,000 units); public data needs only an API key                         | 4 (public)                 |
+| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                                                                                                                             | Partner application/approval                                                          | 10; CSV import until then  |
+| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ (Research API is for academic research, not usable here)                                                                                                                                              | App review                                                                            | 10                         |
+| X              | OAuth 2.0              | ◐ public + (own, recent) non-public tweet metrics                                                                                       | ◐ public metrics                                                                                                                                                                                        | Paid API tier required                                                                | later (optional)           |
+| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data                                                                                                                                                                                      | Commercial use terms                                                                  | later                      |
+| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                                                                                                                                       | Bot added by server admin; Server Insights not in public API **[verify]**             | later                      |
 
 Until a platform has a connector, its accounts get data through CSV import (Scopie templates, plus column aliases for common exports such as LinkedIn's). All rows marked ◐ or ? are verified before the connector is built and documented here, including exact scopes and metric names.
 
 ## 7. Adding a new platform connector
 
-1. Create `lib/platforms/<provider>/` with an adapter implementing `PrivateDataAdapter` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
+1. Create `lib/platforms/<provider>/` with an adapter implementing `PrivateDataAdapter` and/or a collector implementing `PublicProfileCollector` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
 2. Add mappings to `PLATFORM_METRIC_MAP` in `lib/metrics/registry.ts` **and** the same rows to `platform_metric_map` in a migration, each with a `comparability_class`. Add new metrics to both `METRIC_DEFINITIONS` and `metric_definitions`. Integration tests check code and database match.
-3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`) and, in the same migration, set `platforms.connector_status = 'available'` and `reporting_timezone`.
+3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`; or `PUBLIC_DATA_PLATFORMS`, `createPublicCollector`) and, in the same migration, set `platforms.private_data_status` or `public_data_status` to `'available'`, and `reporting_timezone`.
 4. Add connect/callback routes under `app/api/connections/<provider>/` and a `lib/connections/<provider>.ts` that stores tokens only through `connection_credentials`.
 5. Add fixture tests (`tests/fixtures/<provider>/`): happy path, pagination, rate limit, expired token, missing permission, metric not returned.
 6. Add env vars to `lib/server-env.ts` and `.env.example`, and setup steps to this document.

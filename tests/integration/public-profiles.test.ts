@@ -427,6 +427,18 @@ describe('public observation', () => {
     await admin.from('sync_runs').delete().eq('status', 'queued');
   });
 
+  it('keeps a complete daily observation when usage is high, then pauses the rest', async () => {
+    collector.appUsage = 90;
+    await admin.from('sync_runs').delete().eq('status', 'queued');
+    await queue('public_profile_daily');
+    await queue('public_posts_refresh');
+    const results = await processQueue(deps(collector, '2026-10-15T06:00:00Z'));
+    expect(results).toHaveLength(1);
+    expect(results[0]!.outcome).toMatchObject({ status: 'succeeded', pausePublic: true });
+    collector.appUsage = 0;
+    await admin.from('sync_runs').delete().eq('status', 'queued');
+  });
+
   it('never lets a user write public data themselves', async () => {
     const { error } = await owner.client.from('posts').insert({
       organization_id: orgId,

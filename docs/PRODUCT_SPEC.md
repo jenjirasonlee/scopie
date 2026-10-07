@@ -69,7 +69,8 @@ _Built in Phase 1:_ manual add/edit, activate/deactivate (accounts are never del
 - Add an account manually (platform, handle, display name, country, language, account type, owner, timezone) or by connecting via OAuth (fields pre-filled).
 - Account card shows: connection status (`not_connected`, `connected`, `needs_reauth`, `error`, `demo`), data source, last successful sync, active/inactive.
 - Groups: every account has a country; accounts can also belong to custom groups (region, "Core markets", competitors).
-- Competitor accounts: flagged `is_competitor`, only ever filled from public data.
+- Every profile has a business role (Own profile, Competitor, Industry, Influencer / creator, Other) and an access type set by the system (Public, Connected, Imported, Demo). Only own profiles can be connected; competitors are only ever filled from public data or CSV import (Phase 3).
+- Public Instagram profiles are added by username with a live preview, or in bulk from a list or CSV, and can be removed with all their data. See [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md).
 
 ### 6.3 Dashboard (V1)
 
@@ -141,7 +142,7 @@ Private to the individual user: recommendations implemented, campaigns managed, 
 - Every metric shown uses a key from the metric dictionary (DATABASE.md §5) and shows its definition on hover.
 - Rates state their denominator in the label: "Engagement rate (by reach)", "Engagement rate (by followers)".
 - Missing data shows "N/A" + reason ("Not provided by LinkedIn API", "Account not connected", "Before account connected").
-- Source badge on every KPI and table: `Live`, `Public`, `Manual`, `Imported`, `DEMO`. Any view containing demo data shows a persistent "Contains demo data" banner.
+- Source badge on every KPI and table: `PUBLIC`, `CONNECTED`, `IMPORTED`, `ESTIMATED`, `DEMO`. Any view containing demo data shows a persistent "Contains demo data" banner.
 - Averages are always paired with medians where distributions are skewed (post-level metrics).
 
 ## 8. Design direction

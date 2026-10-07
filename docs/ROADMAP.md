@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 and 2 complete. Phase 3 (public profile intelligence) proposed in [PHASE_3_PLAN.md](PHASE_3_PLAN.md), not started. Last updated: 2026-10-07
+> Status: Phases 1, 2 and 3 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app. Phase 4 (benchmarking + YouTube) is next. Last updated: 2026-10-07
 
 ## 1. Product focus
 
@@ -20,10 +20,10 @@ Every number carries its provenance (PUBLIC, CONNECTED, IMPORTED, ESTIMATED, DEM
 > **"Add CANNA's and competitors' Instagram profiles by username, watch them every day, and see who is growing, who posts what, and what performs best, with every number traceable to an observation."**
 
 1. Sign in, organization, roles (done).
-2. Profiles with platform, country, business role and access type.
-3. Public Instagram observation through Meta's official Business Discovery API; CSV import for platforms without a public API (done).
-4. Dashboard and comparisons built from stored observations.
-5. An evidence-based "What changed?" panel.
+2. Profiles with platform, country, business role and access type (done).
+3. Public Instagram observation through Meta's official Business Discovery API (done); CSV import for platforms without a public API (done).
+4. Dashboard and comparisons built from stored observations (Phase 3, `lib/analytics`).
+5. An evidence-based "What changed?" panel (Phase 3, `lib/analytics`).
 6. Optional connected enrichment for CANNA accounts (Meta connector, done).
 
 ## 2. Phases
@@ -35,7 +35,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **1** Foundation ✅                       | Next.js + strict TS, Tailwind, shadcn-style UI, Supabase + RLS, auth, organizations, roles, app shell, social accounts, DEMO seed, CI                                                                                                                                                          | Sign in, create org, manage accounts; isolation tests pass                                                          |
 | — Architecture review ✅                  | Data-layer review; its decisions are built (see [DATA_PIPELINE.md](DATA_PIPELINE.md), [METRICS.md](METRICS.md))                                                                                                                                                                                | Decisions approved                                                                                                  |
 | **2** Real social data pipeline ✅        | Metric dictionary, posts and append-only metric snapshots, shared ingest step, CSV import, Meta connector (Instagram + Facebook) with OAuth, encrypted tokens, scheduled sync, sync health, DEMO posts and metrics                                                                             | A connected account syncs on schedule and on demand; CSV import works; fixture tests for every error path           |
-| **3** Public profile intelligence         | Access type and business role, provenance labels, public Instagram observation via Business Discovery, add profile by username, observation history, public posts and engagement, analytics layer, first dashboard, comparisons, "What changed?" panel. See [PHASE_3_PLAN.md](PHASE_3_PLAN.md) | A competitor added by username is observed daily on a real Meta app; dashboard and insights show only stored values |
+| **3** Public profile intelligence ✅      | Access type and business role, provenance labels, public Instagram observation via Business Discovery, add profile by username, observation history, public posts and engagement, analytics layer, first dashboard, comparisons, "What changed?" panel. See [PHASE_3_PLAN.md](PHASE_3_PLAN.md) | A competitor added by username is observed daily on a real Meta app; dashboard and insights show only stored values |
 | **4** Benchmarking + YouTube              | Benchmark groups, rankings with their basis, country vs country, period comparisons; YouTube public collector (API key, no Meta needed)                                                                                                                                                        | Rankings exclude non-comparable values; a YouTube channel is observed with no OAuth                                 |
 | **5** Content management + calendar       | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
 | **6** Review + approval                   | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
@@ -57,29 +57,29 @@ Phases 5–7 don't need platform data, so they can run alongside 3–4. Platform
 
 ## 4. What's needed from people (not engineering decisions)
 
-| Needed                                                                                                                                                                                        | When                          | From        |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------- |
-| Merge PR #1 (Phase 2)                                                                                                                                                                         | Now                           | Jen         |
-| A viewer account for public Instagram data: any Instagram professional account linked to a Facebook Page that the person setting up Scopie manages. CANNA Business admin access isn't needed. | Before Phase 3 is tested live | Jen         |
-| A Meta developer app created by that person (Facebook Login for Business)                                                                                                                     | Before Phase 3 is tested live | Jen         |
-| First list of competitor, industry and creator handles                                                                                                                                        | During Phase 3                | Jen         |
-| A short legal/privacy check of competitor monitoring                                                                                                                                          | Before launch                 | CANNA legal |
-| A Supabase project and a Trigger.dev project                                                                                                                                                  | Before going live             | Jen         |
-| A YouTube Data API key                                                                                                                                                                        | Phase 4                       | Jen         |
-| OpenAI API key                                                                                                                                                                                | Phase 8                       | Jen         |
+| Needed                                                                                                                                                                                                                                            | When                          | From        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------- |
+| A viewer account for public Instagram data: any Instagram professional account linked to a Facebook Page that the person setting up Scopie manages. CANNA Business admin access isn't needed. Steps: [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md) | Before Phase 3 is tested live | Jen         |
+| A Meta developer app created by that person (Facebook Login for Business)                                                                                                                                                                         | Before Phase 3 is tested live | Jen         |
+| Confirm on the live test whether Standard Access is enough for Business Discovery, or App Review is needed                                                                                                                                        | First live test               | Jen + dev   |
+| First list of competitor, industry and creator handles                                                                                                                                                                                            | During Phase 3                | Jen         |
+| A short legal/privacy check of competitor monitoring                                                                                                                                                                                              | Before launch                 | CANNA legal |
+| A Supabase project and a Trigger.dev project                                                                                                                                                                                                      | Before going live             | Jen         |
+| A YouTube Data API key                                                                                                                                                                                                                            | Phase 4                       | Jen         |
+| OpenAI API key                                                                                                                                                                                                                                    | Phase 8                       | Jen         |
 
 ## 5. Risks
 
-| Risk                                                                                       | Mitigation                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Meta access/approval friction or metric deprecations                                       | Business Discovery runs on Standard Access through the viewer account; pin API version; metric map is data; saved-response tests keep development unblocked. |
-| Business Discovery limits (business/creator accounts only, hidden likes, Reels-only views) | Show each limitation as an availability reason; offer CSV import for accounts the API can't read.                                                            |
-| Competitor monitoring and platform terms                                                   | Official APIs only; no scraping; business account metrics only; delete-on-request action; legal check before launch.                                         |
-| LinkedIn/TikTok access not granted                                                         | Manual/CSV import with `Manual`/`Imported` badges; never fake.                                                                                               |
-| Cross-platform comparisons misleading users                                                | Comparability classes enforced in the analytics layer, not just UI.                                                                                          |
-| AI producing generic or wrong claims                                                       | Deterministic signals, evidence validators, computed confidence.                                                                                             |
-| Scope creep before V1                                                                      | This roadmap; each phase has exit criteria.                                                                                                                  |
-| No history for public profiles                                                             | Start observing as soon as a profile is added; record first observed date and earliest available post; never back-fill.                                      |
+| Risk                                                                                       | Mitigation                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Meta access/approval friction or metric deprecations                                       | Business Discovery runs through the viewer account; whether Standard Access is enough is confirmed on the first live test. Pin API version; metric map is data; saved-response tests keep development unblocked. |
+| Business Discovery limits (business/creator accounts only, hidden likes, Reels-only views) | Show each limitation as an availability reason; offer CSV import for accounts the API can't read.                                                                                                                |
+| Competitor monitoring and platform terms                                                   | Official APIs only; no scraping; business account metrics only; delete-on-request action; legal check before launch.                                                                                             |
+| LinkedIn/TikTok access not granted                                                         | CSV import with the `IMPORTED` label; never fake.                                                                                                                                                                |
+| Cross-platform comparisons misleading users                                                | Comparability classes enforced in the analytics layer, not just UI.                                                                                                                                              |
+| AI producing generic or wrong claims                                                       | Deterministic signals, evidence validators, computed confidence.                                                                                                                                                 |
+| Scope creep before V1                                                                      | This roadmap; each phase has exit criteria.                                                                                                                                                                      |
+| No history for public profiles                                                             | Start observing as soon as a profile is added; record first observed date and earliest available post; never back-fill.                                                                                          |
 
 ## 6. Phase 1 outcome
 
@@ -93,6 +93,12 @@ Delivered: the review's "change before API development" decisions; posts, append
 
 Not yet verified against a real Meta account: that needs a Meta app (see §4). Every Meta behaviour is covered by tests against saved responses.
 
-## 8. Next step
+## 8. Phase 3 outcome
 
-**Phase 3: Public profile intelligence**, as proposed in [PHASE_3_PLAN.md](PHASE_3_PLAN.md). Waiting for approval before any code.
+Delivered: business role and access type on every profile (access type derived by the database); provenance values PUBLIC / CONNECTED / IMPORTED / ESTIMATED / DEMO with database rules; availability reasons `hidden_by_owner` and `not_public`; the Instagram public collector through Business Discovery and a viewer account; three public sync jobs with an 80% app-usage pause; profile snapshots stored only on change; `earliest_post_at` and observation dates; Settings → Public data; add profile with a live preview, bulk add from a list or CSV, and remove profile with all its data; observation history and coverage on profile pages; DEMO public competitor profiles; dashboard and analytics (`lib/analytics`). Setup guide for the viewer account: [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md).
+
+Not yet verified against a real Meta app: a live Business Discovery lookup, and whether Standard Access is enough. Every Meta behaviour is covered by tests against saved responses.
+
+## 9. Next step
+
+**Phase 4: Benchmarking + YouTube.** Benchmark groups, rankings with their basis, period comparisons, and the YouTube public collector (API key, no Meta app needed).

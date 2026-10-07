@@ -51,7 +51,7 @@ export async function runPublicJob(
   state: SyncState,
   log: PublicJobLog,
   now: () => Date,
-): Promise<void> {
+): Promise<{ nearLimit: boolean }> {
   const collector = deps.collectorFor?.(account.platform_key) ?? null;
   if (!collector || !deps.publicContextFor) {
     throw new PlatformError(
@@ -67,6 +67,7 @@ export async function runPublicJob(
   const job = new PublicJob(deps, run, account, state, collector, ctx, log, now);
   try {
     await job.execute();
+    return { nearLimit: job.nearLimit };
   } catch (error) {
     if (error instanceof AuthError && ctx.connectionId) {
       // The viewer's token failed, not the profile. Ask for the viewer to be reconnected.
@@ -84,6 +85,8 @@ export async function runPublicJob(
 }
 
 class PublicJob {
+  nearLimit = false;
+
   constructor(
     private readonly deps: EngineDeps,
     private readonly run: SyncRun,
@@ -226,6 +229,12 @@ class PublicJob {
     await this.write({ accountMetrics: observation.accountMetrics }, capturedAt);
     await this.storePage(observation.firstPage, capturedAt);
     await this.recordProfile(observation.profile, capturedAt);
+    await this.markObserved(capturedAt);
+    // The observation is complete, so the run succeeds; only the jobs after it wait.
+    this.nearLimit = (this.collector.appUsage ?? 0) >= PUBLIC_USAGE_PAUSE_PERCENT;
+  }
+
+  private async markObserved(capturedAt: string) {
     await this.db
       .from('social_accounts')
       .update({

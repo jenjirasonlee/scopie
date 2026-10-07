@@ -44,6 +44,8 @@ export type RunOutcome = {
   processed: number;
   failed: number;
   errorCode?: string;
+  /** Meta reports the app near its hourly limit: run no more public jobs this tick. */
+  pausePublic?: boolean;
 };
 
 const MAX_EVENTS_PER_RUN = 100;
@@ -147,8 +149,9 @@ export async function runSyncJob(deps: EngineDeps, runId: string): Promise<RunOu
   const publicJob = isPublicJob(run.job_type);
   let outcome: RunOutcome;
   try {
+    let pausePublic = false;
     if (publicJob) {
-      await runPublicJob(deps, run, account, state, log, now);
+      ({ nearLimit: pausePublic } = await runPublicJob(deps, run, account, state, log, now));
     } else {
       await runConnectedJob(deps, run, account, state, log, now);
     }
@@ -160,6 +163,7 @@ export async function runSyncJob(deps: EngineDeps, runId: string): Promise<RunOu
       status: log.failed > 0 ? 'partial' : 'succeeded',
       processed: log.processed,
       failed: log.failed,
+      ...(pausePublic ? { pausePublic } : {}),
     };
     // last_successful_sync_at describes the owner connection; public reads use last_observed_at.
     if (!publicJob) {
