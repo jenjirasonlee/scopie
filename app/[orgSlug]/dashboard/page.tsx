@@ -1,237 +1,193 @@
-import { CheckCircle2, Circle, Info } from 'lucide-react';
+import { Info, Plus } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PlatformMark } from '@/components/accounts/platform-mark';
+import { GettingStarted, type ChecklistItem } from '@/components/dashboard/getting-started';
+import { InsightsPanel } from '@/components/dashboard/insights-panel';
+import { RangeFilter } from '@/components/dashboard/range-filter';
+import {
+  ComparisonTable,
+  FollowerTrend,
+  GroupComparison,
+  Hashtags,
+  PostingFrequency,
+  Tiles,
+  TopEngagement,
+  TopPosts,
+} from '@/components/dashboard/sections';
+import { DataSourceBadge } from '@/components/pipeline/data-source-badge';
 import { PageHeader } from '@/components/shared/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { CONNECTION_STATUS_LABELS, type ConnectionStatus } from '@/lib/accounts/labels';
-import { getAccountSummary, listCountries, listPlatforms } from '@/lib/accounts/queries';
+import { Card, CardContent } from '@/components/ui/card';
+import { listCountries } from '@/lib/accounts/queries';
+import { loadDashboard } from '@/lib/analytics/queries';
+import { formatPeriod, parseRangeParam } from '@/lib/analytics/range';
 import { can } from '@/lib/auth/permissions';
 import { getOrgContext } from '@/lib/orgs/queries';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
-export default async function DashboardPage({ params }: { params: Promise<{ orgSlug: string }> }) {
-  const { orgSlug } = await params;
+export default async function DashboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const [{ orgSlug }, search] = await Promise.all([params, searchParams]);
+  const days = parseRangeParam(search.range);
   const { org, role } = await getOrgContext(orgSlug);
-  const [summary, countries, platforms] = await Promise.all([
-    getAccountSummary(org.id),
+  const canManage = can(role, 'accounts.manage');
+  // getOrgContext has already read request data, so the current time is per request.
+  const now = new Date();
+  const [{ model, hasViewer, countriesMissing }, countries] = await Promise.all([
+    loadDashboard({ orgId: org.id, orgSlug, isDemoOrg: org.is_demo, days, now }),
     listCountries(),
-    listPlatforms(),
   ]);
-  const countryName = new Map(countries.map((country) => [country.code, country.name]));
-  const platformName = new Map(platforms.map((platform) => [platform.key, platform.name]));
-  const withCountry = summary.byCountry.filter((row) => row.code !== null).length;
-  const missingCountry = summary.byCountry.find((row) => row.code === null)?.count ?? 0;
+  const countryNames = new Map(countries.map((c) => [c.code, c.name]));
 
-  const tiles = [
-    { label: 'Social accounts', value: summary.total, note: `${summary.inactive} inactive` },
-    { label: 'Active accounts', value: summary.active, note: 'Included in future analytics' },
+  const checklist: ChecklistItem[] = [
     {
-      label: 'Countries',
-      value: withCountry,
-      note: missingCountry
-        ? `${missingCountry} account(s) without a country`
-        : 'All accounts assigned',
+      label: 'Add the profiles you want to monitor',
+      done: model.tiles.active > 0,
+      href: `/${orgSlug}/accounts/new`,
+      help: 'Competitors, industry accounts, creators and your own profiles, by username.',
     },
-    { label: 'Platforms', value: summary.byPlatform.length, note: 'With at least one account' },
-  ];
-
-  const checklist = [
-    { done: true, label: 'Create your organization' },
-    { done: summary.total > 0, label: 'Add your social accounts', href: `/${orgSlug}/accounts` },
+    ...(org.is_demo
+      ? []
+      : [
+          {
+            label: 'Choose a viewer account for public data',
+            done: hasViewer,
+            href: `/${orgSlug}/settings/public-data`,
+            help: 'Scopie reads public Instagram data through one professional account you manage.',
+          },
+        ]),
     {
-      done: summary.total > 0 && missingCountry === 0,
-      label: 'Assign a country to every account',
+      label: 'Assign a country to every profile',
+      done: model.tiles.active > 0 && countriesMissing === 0,
       href: `/${orgSlug}/accounts`,
     },
     {
-      done: (summary.byConnection.connected ?? 0) > 0,
-      label: 'Connect Instagram and Facebook',
+      label: 'Connect your own accounts for private metrics',
+      done: (model.tiles.byAccess.connected ?? 0) > 0,
       href: `/${orgSlug}/settings/connections`,
+      optional: true,
     },
   ];
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description={`Overview of ${org.name}.`}
-        actions={
-          can(role, 'accounts.manage') ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/${orgSlug}/accounts/new`}>Add account</Link>
-            </Button>
-          ) : null
-        }
-      />
+  const header = (
+    <PageHeader
+      title="Dashboard"
+      description={
+        org.is_demo
+          ? `${org.name}. Everything below is DEMO DATA generated for testing; none of it is real.`
+          : `Public social intelligence for ${org.name}, from what Scopie has actually observed.`
+      }
+      actions={
+        canManage ? (
+          <Button asChild size="sm">
+            <Link href={`/${orgSlug}/accounts/new`}>
+              <Plus aria-hidden />
+              Add profile
+            </Link>
+          </Button>
+        ) : null
+      }
+    />
+  );
 
-      <Alert variant="info">
-        <Info aria-hidden />
-        <AlertTitle>Performance analytics aren&apos;t available yet</AlertTitle>
-        <AlertDescription>
-          Scopie now collects data from connected Instagram and Facebook accounts and from CSV
-          imports. Charts of reach, engagement and followers arrive with the analytics dashboard
-          (Phase 3). Scopie never shows estimated or sample numbers in their place.
-        </AlertDescription>
-      </Alert>
-
-      <section
-        aria-label="Account overview"
-        className="bg-border grid grid-cols-2 gap-px overflow-hidden rounded-lg border lg:grid-cols-4"
-      >
-        {tiles.map((tile) => (
-          <div key={tile.label} className="bg-card px-5 py-4">
-            <p className="text-muted-foreground text-xs font-medium">{tile.label}</p>
-            <p className="tabular mt-1 text-2xl font-semibold tracking-tight">{tile.value}</p>
-            <p className="text-muted-foreground mt-0.5 text-xs">{tile.note}</p>
-          </div>
-        ))}
-      </section>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr_320px]">
+  if (model.tiles.active === 0) {
+    return (
+      <div className="space-y-6">
+        {header}
         <Card>
-          <CardHeader>
-            <CardTitle>Accounts by country</CardTitle>
-            <CardDescription>Count of social accounts, all statuses.</CardDescription>
-          </CardHeader>
-          <BreakdownTable
-            emptyLabel="No accounts yet."
-            rows={summary.byCountry.map((row) => ({
-              key: row.code ?? 'none',
-              label: row.code ? (countryName.get(row.code) ?? row.code) : 'No country',
-              count: row.count,
-            }))}
-            total={summary.total}
-            column="Country"
-          />
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Accounts by platform</CardTitle>
-            <CardDescription>Count of social accounts, all statuses.</CardDescription>
-          </CardHeader>
-          <BreakdownTable
-            emptyLabel="No accounts yet."
-            rows={summary.byPlatform.map((row) => ({
-              key: row.key,
-              label: (
-                <span className="inline-flex items-center gap-2">
-                  <PlatformMark platformKey={row.key} />
-                  {platformName.get(row.key) ?? row.key}
-                </span>
-              ),
-              count: row.count,
-            }))}
-            total={summary.total}
-            column="Platform"
-          />
-          {summary.total > 0 ? (
-            <div className="flex flex-wrap gap-1.5 border-t px-5 py-3">
-              {Object.entries(summary.byConnection).map(([status, count]) => (
-                <Badge key={status} variant={status === 'demo' ? 'demo' : 'muted'}>
-                  {CONNECTION_STATUS_LABELS[status as ConnectionStatus]}: {count}
-                </Badge>
-              ))}
+          <CardContent className="space-y-3 py-8 text-center">
+            <h2 className="text-base font-semibold">No profiles to monitor yet</h2>
+            <p className="text-muted-foreground mx-auto max-w-lg text-[13px]">
+              Add a competitor, an industry account, a creator or one of your own profiles by its
+              username. Scopie starts observing it the same day and builds its history from then on;
+              numbers from before that day aren’t available and are never estimated.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
+              {canManage ? (
+                <Button asChild size="sm">
+                  <Link href={`/${orgSlug}/accounts/new`}>Accounts → Add profile</Link>
+                </Button>
+              ) : null}
+              {!org.is_demo ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/${orgSlug}/settings/public-data`}>Settings → Public data</Link>
+                </Button>
+              ) : null}
             </div>
-          ) : null}
-        </Card>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Getting started</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2.5">
-              {checklist.map((item) => (
-                <li key={item.label} className="flex items-start gap-2.5 text-[13px]">
-                  {item.done ? (
-                    <CheckCircle2
-                      className="text-success mt-px size-4 shrink-0"
-                      aria-label="Done"
-                    />
-                  ) : (
-                    <Circle
-                      className="text-muted-foreground/60 mt-px size-4 shrink-0"
-                      aria-label="Not done"
-                    />
-                  )}
-                  <span className={item.done ? 'text-muted-foreground' : undefined}>
-                    {item.href && !item.done ? (
-                      <Link href={item.href} className="text-primary font-medium hover:underline">
-                        {item.label}
-                      </Link>
-                    ) : (
-                      item.label
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
+        <GettingStarted items={checklist} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {header}
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <RangeFilter orgSlug={orgSlug} days={days} />
+        <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
+          {formatPeriod(model.periods.current)} · compared on
+          <DataSourceBadge source={model.source} />
+          data
+        </p>
+      </div>
+
+      {!model.hasAnyObservation ? (
+        <Alert variant="info">
+          <Info aria-hidden />
+          <AlertTitle>Nothing has been observed yet</AlertTitle>
+          <AlertDescription>
+            Scopie observes each public profile once a day from the day it was added. Growth needs
+            two observations a day apart; engagement needs posts that are 7 days old.
+            {!org.is_demo && !hasViewer ? (
+              <>
+                {' '}
+                First,{' '}
+                <Link
+                  href={`/${orgSlug}/settings/public-data`}
+                  className="font-medium underline underline-offset-2"
+                >
+                  choose a viewer account in Settings → Public data
+                </Link>
+                .
+              </>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Tiles model={model} />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <InsightsPanel insights={model.insights} periods={model.periods} />
+        <GettingStarted items={checklist} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <FollowerTrend model={model} orgSlug={orgSlug} />
+        <PostingFrequency model={model} orgSlug={orgSlug} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <TopEngagement model={model} orgSlug={orgSlug} />
+        <TopPosts model={model} orgSlug={orgSlug} />
+      </div>
+
+      <ComparisonTable model={model} orgSlug={orgSlug} />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <GroupComparison model={model} countryNames={countryNames} />
+        <Hashtags model={model} />
       </div>
     </div>
-  );
-}
-
-function BreakdownTable({
-  rows,
-  total,
-  column,
-  emptyLabel,
-}: {
-  rows: { key: string; label: React.ReactNode; count: number }[];
-  total: number;
-  column: string;
-  emptyLabel: string;
-}) {
-  if (!rows.length) {
-    return <p className="text-muted-foreground px-5 py-6 text-[13px]">{emptyLabel}</p>;
-  }
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{column}</TableHead>
-          <TableHead className="w-24 text-right">Accounts</TableHead>
-          <TableHead className="w-40">Share</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => {
-          const share = total ? Math.round((row.count / total) * 100) : 0;
-          return (
-            <TableRow key={row.key}>
-              <TableCell>{row.label}</TableCell>
-              <TableCell className="tabular text-right">{row.count}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <div className="bg-muted h-1.5 flex-1 rounded-full">
-                    <div
-                      className="bg-primary/70 h-1.5 rounded-full"
-                      style={{ width: `${share}%` }}
-                    />
-                  </div>
-                  <span className="tabular text-muted-foreground w-9 text-right text-xs">
-                    {share}%
-                  </span>
-                </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
   );
 }

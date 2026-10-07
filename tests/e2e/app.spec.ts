@@ -59,9 +59,8 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
 
   await expect(page).toHaveURL(new RegExp(`/${slug}/dashboard$`));
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-  await expect(
-    page.getByText('Performance analytics aren’t available yet'.replace('’', "'")),
-  ).toBeVisible();
+  // A new organization gets an honest empty state, not demo charts.
+  await expect(page.getByText('No profiles to monitor yet')).toBeVisible();
 
   // Empty state, then a validation error that keeps what was typed.
   await page.getByRole('link', { name: 'Accounts', exact: true }).click();
@@ -301,6 +300,12 @@ test('public profiles: viewer setup explained, bulk add, observed history, remov
   await page.goto(`/${org.slug}/accounts/${account!.id}`);
   await expect(page.getByText(/Observed since 07\/09\/2026/)).toBeVisible();
   await expect(page.getByText('+4.4% observed growth')).toBeVisible();
+
+  // The dashboard shows the same observed growth from stored observations only.
+  await page.goto(`/${org.slug}/dashboard?range=90`);
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByText('No profiles to monitor yet')).toHaveCount(0);
+  await page.goto(`/${org.slug}/accounts/${account!.id}`);
   await expect(page.getByText('hidden by owner')).toBeVisible();
 
   // Removing needs the word DELETE, then deletes the profile and its data.

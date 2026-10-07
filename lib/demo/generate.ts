@@ -39,6 +39,9 @@ const DAY = 86_400_000;
 /** Snapshots taken at these post ages, like the real sync schedule. */
 const DEMO_SNAPSHOT_DAYS = [1, 7, 30];
 
+/** Generic gardening hashtags so hashtag views have something to show. */
+const DEMO_TAGS = ['#demo', '#hydroponics', '#growtips', '#coco', '#nutrients', '#indoorgarden'];
+
 const FORMATS: Record<string, MediaFormat[]> = {
   instagram: ['image', 'carousel', 'short_video', 'story'],
   facebook: ['image', 'video', 'link', 'text'],
@@ -139,7 +142,7 @@ export function generateDemoAccount(input: {
       externalId: `demo_${input.seed}_${number}`,
       publishedAt: new Date(time).toISOString(),
       permalink: null,
-      caption: `DEMO post ${number}. Fictional content for testing, not a real CANNA post.`,
+      caption: `DEMO post ${number}. Fictional content for testing, not a real CANNA post. ${DEMO_TAGS[between(0, DEMO_TAGS.length - 1)]} ${DEMO_TAGS[between(0, DEMO_TAGS.length - 1)]}`,
       mediaFormat: format,
       nativeType: 'DEMO',
     };

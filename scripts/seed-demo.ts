@@ -269,7 +269,8 @@ async function main() {
     // Competitors, industry accounts and creators are public profiles: public metrics only.
     const isPublic = account.business_role !== 'owned';
     const demo = generateDemoAccount({
-      seed: account.handle ?? account.id,
+      // Each market uses one handle on several platforms; the platform keeps their numbers apart.
+      seed: `${account.handle ?? account.id}:${account.platform_key}`,
       platformKey: account.platform_key,
       now,
       mode: isPublic ? 'public' : 'connected',
