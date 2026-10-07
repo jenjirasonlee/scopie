@@ -120,7 +120,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Benchmarks',
     segment: 'benchmarks',
     icon: Trophy,
-    status: 'planned',
+    status: 'available',
     phase: 4,
     summary: 'Benchmark groups and rankings on clearly named metrics.',
     planned: [

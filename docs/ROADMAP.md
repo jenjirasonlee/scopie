@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1, 2 and 3 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app. Phase 4 (benchmarking + YouTube) is next. Last updated: 2026-10-07
+> Status: Phases 1 to 4 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 5 is next. Last updated: 2026-10-07
 
 ## 1. Product focus
 
@@ -99,6 +99,12 @@ Delivered: business role and access type on every profile (access type derived b
 
 Not yet verified against a real Meta app: a live Business Discovery lookup, and whether Standard Access is enough. Every Meta behaviour is covered by tests against saved responses.
 
-## 9. Next step
+## 9. Phase 4 outcome
 
-**Phase 4: Benchmarking + YouTube.** Benchmark groups, rankings with their basis, period comparisons, and the YouTube public collector (API key, no Meta app needed).
+Delivered: the YouTube public collector (Data API v3 with a server API key, no OAuth, no Meta app), YouTube in add profile, bulk add, sync and Settings → Public data; separate comparability classes for YouTube's rounded subscribers and public views; DEMO YouTube channels. The Benchmarks page: rankings by observed follower growth, posts per week, median public engagement or followers, each with a basis sentence, one platform and one data source at a time, and profiles without a comparable value listed as "Not ranked" with the reason; country vs country medians; this period vs the previous one per profile and per group; benchmark groups (create, rename, delete, add and remove profiles).
+
+Not yet verified against the live YouTube API. Every YouTube behaviour is covered by tests against saved responses.
+
+## 10. Next step
+
+**Phase 5: Content management + calendar.** Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views.
