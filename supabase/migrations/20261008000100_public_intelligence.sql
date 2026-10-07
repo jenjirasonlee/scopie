@@ -207,12 +207,13 @@ revoke insert, update, delete on public.profile_snapshots from authenticated;
 -- ---------------------------------------------------------------------------
 
 create table public.public_data_viewers (
+  id uuid primary key default gen_random_uuid(),  -- for the activity log
   organization_id uuid not null references public.organizations (id) on delete cascade,
   platform_key text not null references public.platforms (key),
   connection_asset_id uuid not null references public.connection_assets (id) on delete cascade,
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now(),
-  primary key (organization_id, platform_key)
+  unique (organization_id, platform_key)
 );
 
 alter table public.public_data_viewers enable row level security;

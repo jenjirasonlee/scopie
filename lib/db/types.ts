@@ -667,14 +667,14 @@ isOneToOne: false
                   ]
                 },"public_data_viewers": {
                   Row: {
-                    "connection_asset_id": string,"created_at": string,"created_by": string | null,"organization_id": string,"platform_key": string
+                    "connection_asset_id": string,"created_at": string,"created_by": string | null,"id": string,"organization_id": string,"platform_key": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "connection_asset_id": string,"created_at"?: string,"created_by"?: string | null,"organization_id": string,"platform_key": string
+                    "connection_asset_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"organization_id": string,"platform_key": string
                   }
                   Update: {
-                    "connection_asset_id"?: string,"created_at"?: string,"created_by"?: string | null,"organization_id"?: string,"platform_key"?: string
+                    "connection_asset_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"organization_id"?: string,"platform_key"?: string
                   }
                   Relationships: [
                     {
