@@ -17,6 +17,7 @@ import {
   lookupPublicProfile,
 } from '@/lib/public-data/actions';
 import { getPublicDataViewer } from '@/lib/public-data/queries';
+import { serverEnv } from '@/lib/server-env';
 
 export const metadata: Metadata = { title: 'Add profile' };
 
@@ -69,7 +70,7 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
 
       <Card>
         <CardHeader>
-          <CardTitle>Public Instagram profile</CardTitle>
+          <CardTitle>Public Instagram profile or YouTube channel</CardTitle>
           <CardDescription>
             Read through Instagram&apos;s official API with your viewer account. Only public numbers
             are collected.
@@ -80,14 +81,17 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
             lookupAction={lookupPublicProfile.bind(null, orgSlug)}
             addAction={addPublicProfile.bind(null, orgSlug)}
             countries={options.countries}
-            canPreview={Boolean(viewer) && !org.is_demo}
+            canPreview={{
+              instagram: Boolean(viewer) && !org.is_demo,
+              youtube: Boolean(serverEnv().YOUTUBE_API_KEY) && !org.is_demo,
+            }}
           />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Add several Instagram profiles</CardTitle>
+          <CardTitle>Add several profiles</CardTitle>
           <CardDescription>
             Paste a list or upload a CSV. Each profile is checked on its first sync; profiles
             Instagram can&apos;t read (personal or age-restricted accounts) are flagged then.

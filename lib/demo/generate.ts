@@ -126,7 +126,11 @@ export function generateDemoAccount(input: {
   }
 
   // Posts: a few a week, each measured at 1, 7 and 30 days old (when that has passed).
-  const formats = FORMATS[input.platformKey] ?? ['image'];
+  // The public YouTube API can't tell Shorts from other videos, so public demo channels don't either.
+  const formats: MediaFormat[] =
+    mode === 'public' && input.platformKey === 'youtube'
+      ? ['video']
+      : (FORMATS[input.platformKey] ?? ['image']);
   const captures = new Map<number, DemoCapture>();
   let time = today - days * DAY;
   let number = 0;
@@ -179,7 +183,7 @@ export function generateDemoAccount(input: {
         capture.metrics.push(
           hidesLikes ? unavailable('likes', 'hidden_by_owner') : metric('likes', likes),
           metric('comments', Math.round(likes * (0.02 + random() * 0.08))),
-          format === 'short_video'
+          format === 'short_video' || input.platformKey === 'youtube'
             ? metric('views', Math.round(reach * (1.3 + random())))
             : unavailable('views', 'not_applicable'),
         );

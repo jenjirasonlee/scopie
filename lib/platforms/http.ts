@@ -19,6 +19,7 @@ const SECRET_PARAMS = [
   'appsecret_proof',
   'input_token',
   'refresh_token',
+  'key',
 ];
 
 /** Removes credentials from a URL so it can be logged or stored. */
@@ -38,7 +39,8 @@ export function redactUrl(url: string): string {
 export function redactText(text: string): string {
   return text
     .replace(new RegExp(`\\b(${SECRET_PARAMS.join('|')})=[^&\\s"]+`, 'gi'), '$1=REDACTED')
-    .replace(/\bEA[A-Za-z0-9]{20,}\b/g, 'REDACTED');
+    .replace(/\bEA[A-Za-z0-9]{20,}\b/g, 'REDACTED')
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}/g, 'REDACTED');
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

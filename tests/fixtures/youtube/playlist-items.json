@@ -1,0 +1,8 @@
+{
+  "nextPageToken": "CDIQAA",
+  "items": [
+    { "contentDetails": { "videoId": "vidFixture01", "videoPublishedAt": "2026-10-05T09:00:00Z" } },
+    { "contentDetails": { "videoId": "vidFixture02", "videoPublishedAt": "2026-10-01T15:00:00Z" } },
+    { "contentDetails": { "videoId": "vidFixture03" } }
+  ]
+}

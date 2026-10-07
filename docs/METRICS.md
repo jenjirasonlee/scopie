@@ -64,6 +64,12 @@ mirrored in `platform_metric_map`):
   include paid views and exist only for Reels, so they are never compared with insights `views`
   (`meta_views`), even on the same account.
 - Facebook reactions (`fb_reactions`) and Instagram likes (`likes`) are different classes.
+- **YouTube subscribers** (`statistics.subscriberCount`) are `yt_subscribers_rounded`, not
+  `audience_size`: YouTube rounds them to 3 significant figures, so they are never ranked against
+  exact follower counts.
+- YouTube channel views are `yt_channel_views` (lifetime) and video views are `yt_public_views`.
+  Neither is compared with Instagram or connected views.
+- YouTube likes and comments share `likes` and `comments`; video count is `posts_total`.
 - A metric with no mapping, such as an imported LinkedIn impression, gets the class
   `<platform>:<metric>` and is only compared within that platform.
 

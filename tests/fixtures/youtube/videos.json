@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "id": "vidFixture01",
+      "snippet": {
+        "publishedAt": "2026-10-05T09:00:00Z",
+        "title": "Coco tips",
+        "description": "#coco #growtips",
+        "liveBroadcastContent": "none"
+      },
+      "statistics": { "viewCount": "5400", "likeCount": "210", "commentCount": "18" }
+    },
+    {
+      "id": "vidFixture02",
+      "snippet": {
+        "publishedAt": "2026-10-01T15:00:00Z",
+        "title": "Hidden likes, comments off",
+        "liveBroadcastContent": "none"
+      },
+      "statistics": { "viewCount": "800" }
+    },
+    {
+      "id": "vidFixture03",
+      "snippet": {
+        "publishedAt": "2026-10-20T15:00:00Z",
+        "title": "Premiere",
+        "liveBroadcastContent": "upcoming"
+      },
+      "statistics": {}
+    }
+  ]
+}

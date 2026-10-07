@@ -9,27 +9,44 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { BUSINESS_ROLE_LABELS, BUSINESS_ROLES } from '@/lib/accounts/labels';
-import type { LookupState } from '@/lib/public-data/shared';
+import type { LookupState, PublicProfilePlatform } from '@/lib/public-data/shared';
 
 type Option = { value: string; label: string };
 type Action = (state: LookupState, formData: FormData) => Promise<LookupState>;
 
-/** What Business Discovery gives for any business or creator account (PHASE_3_PLAN.md §2). */
-const TRACKABLE = [
-  'Followers, observed once a day from today',
-  'Number of posts on the profile',
-  'Bio and website, with changes recorded',
-  'Posts: link, caption, date, format and hashtags',
-  'Likes per post (unless the owner hides them)',
-  'Comments per post',
-  'Views on Reels',
-];
-const NOT_PUBLIC = [
-  'Reach, saves and shares',
-  'Audience demographics',
-  'Stories',
-  'Follower history before today',
-];
+/** What each official public API gives for any public profile (PHASE_3_PLAN.md §2). */
+const TRACKABLE: Record<PublicProfilePlatform, string[]> = {
+  instagram: [
+    'Followers, observed once a day from today',
+    'Number of posts on the profile',
+    'Bio and website, with changes recorded',
+    'Posts: link, caption, date, format and hashtags',
+    'Likes per post (unless the owner hides them)',
+    'Comments per post',
+    'Views on Reels',
+  ],
+  youtube: [
+    'Subscribers, observed once a day (YouTube rounds them to 3 significant figures)',
+    'Number of videos and total channel views',
+    'Channel description, with changes recorded',
+    'Videos: link, title, description, date and hashtags',
+    'Views, likes (unless hidden) and comments (unless turned off) per video',
+  ],
+};
+const NOT_PUBLIC: Record<PublicProfilePlatform, string[]> = {
+  instagram: [
+    'Reach, saves and shares',
+    'Audience demographics',
+    'Stories',
+    'Follower history before today',
+  ],
+  youtube: [
+    'Watch time and retention',
+    'Audience demographics and traffic sources',
+    'Whether a video is a Short (not exposed by the API)',
+    'Subscriber history before today',
+  ],
+};
 
 const nf = new Intl.NumberFormat('en-GB');
 
@@ -42,9 +59,10 @@ export function AddPublicProfile({
   lookupAction: Action;
   addAction: Action;
   countries: Option[];
-  /** False when no viewer account is set up yet: profiles can still be added. */
-  canPreview: boolean;
+  /** Per platform: false when its API isn't set up yet. Profiles can still be added. */
+  canPreview: Record<PublicProfilePlatform, boolean>;
 }) {
+  const [platform, setPlatform] = useState<PublicProfilePlatform>('instagram');
   const [lookup, lookupFormAction] = useActionState(lookupAction, { status: 'idle' });
   const [added, addFormAction] = useActionState(addAction, { status: 'idle' });
   const [handle, setHandle] = useState('');
@@ -54,10 +72,24 @@ export function AddPublicProfile({
   return (
     <div className="space-y-5">
       <form action={lookupFormAction} className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="platform" value={platform} />
+        <FormField id="lookup-platform" label="Platform" className="w-40">
+          <NativeSelect
+            value={platform}
+            onChange={(event) => setPlatform(event.target.value as PublicProfilePlatform)}
+          >
+            <option value="instagram">Instagram</option>
+            <option value="youtube">YouTube</option>
+          </NativeSelect>
+        </FormField>
         <FormField
           id="lookup-handle"
-          label="Instagram username"
-          hint="A business or creator account, e.g. @brandname or a profile link."
+          label={platform === 'youtube' ? 'YouTube handle' : 'Instagram username'}
+          hint={
+            platform === 'youtube'
+              ? 'Any public channel, e.g. @brandname or a channel link.'
+              : 'A business or creator account, e.g. @brandname or a profile link.'
+          }
           className="min-w-64 flex-1"
         >
           <Input
@@ -69,7 +101,7 @@ export function AddPublicProfile({
             required
           />
         </FormField>
-        {canPreview ? (
+        {canPreview[platform] ? (
           <SubmitButton variant="outline" pendingLabel="Looking up…" className="mb-5">
             Preview
           </SubmitButton>
@@ -97,13 +129,17 @@ export function AddPublicProfile({
           ) : null}
           <dl className="grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-3">
             <div>
-              <dt className="text-muted-foreground">Followers</dt>
+              <dt className="text-muted-foreground">
+                {platform === 'youtube' ? 'Subscribers' : 'Followers'}
+              </dt>
               <dd className="font-medium tabular-nums">
                 {preview.followers === null ? 'not available' : nf.format(preview.followers)}
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Posts</dt>
+              <dt className="text-muted-foreground">
+                {platform === 'youtube' ? 'Videos' : 'Posts'}
+              </dt>
               <dd className="font-medium tabular-nums">
                 {preview.postsTotal === null ? 'not available' : nf.format(preview.postsTotal)}
               </dd>
@@ -119,7 +155,7 @@ export function AddPublicProfile({
             <div>
               <p className="mb-1 font-medium">Scopie can track</p>
               <ul className="space-y-1">
-                {TRACKABLE.map((item) => (
+                {TRACKABLE[platform].map((item) => (
                   <li key={item} className="flex gap-2">
                     <Check className="text-success mt-0.5 size-3.5 shrink-0" aria-hidden />
                     {item}
@@ -130,7 +166,7 @@ export function AddPublicProfile({
             <div>
               <p className="mb-1 font-medium">Not public, so never shown</p>
               <ul className="text-muted-foreground space-y-1">
-                {NOT_PUBLIC.map((item) => (
+                {NOT_PUBLIC[platform].map((item) => (
                   <li key={item} className="flex gap-2">
                     <Minus className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                     {item}
@@ -144,6 +180,7 @@ export function AddPublicProfile({
 
       <form action={addFormAction} className="space-y-4">
         <input type="hidden" name="handle" value={handleForSave} />
+        <input type="hidden" name="platform" value={platform} />
         {preview ? <input type="hidden" name="externalId" value={preview.externalId} /> : null}
         <div className="grid gap-4 sm:grid-cols-3">
           <FormField id="add-name" label="Name in Scopie" optional>

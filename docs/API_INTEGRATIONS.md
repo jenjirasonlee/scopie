@@ -1,6 +1,6 @@
 # Scopie — Platform Integrations
 
-> Status: the Meta connector (Instagram + Facebook Pages) is built (Phase 2). Public Instagram data through Business Discovery is built (Phase 3, §4a). YouTube public data is planned for Phase 4; other platforms are planned (Phase 10) and get data through CSV import until then. Last updated: 2026-10-07
+> Status: the Meta connector (Instagram + Facebook Pages) is built (Phase 2). Public Instagram data through Business Discovery is built (Phase 3, §4a). Public YouTube data through the Data API is built (Phase 4, §4b); other platforms are planned (Phase 10) and get data through CSV import until then. Last updated: 2026-10-07
 >
 > **Accuracy rule:** platform APIs change often (metric renames, deprecations, access tiers, pricing). Everything below reflects our understanding at the time of writing and is marked **[verify]** where details must be re-checked against the platform's official documentation. Nothing here may be used to fabricate a metric: if the API doesn't return it, Scopie stores it as unavailable, with a reason.
 
@@ -233,9 +233,63 @@ Business Discovery counts against the Graph API platform limit: about 200 calls 
 | Follower history and earlier post metrics         | Only current totals; Scopie builds history from the day it is added |
 | Hashtag search                                    | Needs Meta's Instagram Public Content Access feature (Phase 10)     |
 
+## 4b. Public data: YouTube Data API
+
+Built in Phase 4 (`lib/platforms/youtube/public.ts`). The YouTube Data API v3 returns public channel and video statistics for any public channel with only an API key: no OAuth, no Google account of the channel owner, no Meta app. Plain-language setup: [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md#youtube).
+
+Reference: [channels.list](https://developers.google.com/youtube/v3/docs/channels/list) · [playlistItems.list](https://developers.google.com/youtube/v3/docs/playlistItems/list) · [videos.list](https://developers.google.com/youtube/v3/docs/videos/list) · [Quota](https://developers.google.com/youtube/v3/determine_quota_cost)
+
+### API key
+
+- One server-wide key in `YOUTUBE_API_KEY` (server only, never `NEXT_PUBLIC_`). There is no viewer account and nothing per organization.
+- The key is sent in the `X-Goog-Api-Key` header, never in the URL, so it can't end up in logs or stored request URLs. `redactText` also removes anything shaped like a Google API key.
+- Without the key, YouTube channels can still be added but nothing is scheduled for them, and **Settings → Public data** says "API key missing".
+- A rejected key (`keyInvalid`, `keyExpired`) fails the run with an auth error; it never marks the channel as broken.
+
+### Calls
+
+| Call                                                       | Used for                                 | Quota |
+| ---------------------------------------------------------- | ---------------------------------------- | ----- |
+| `channels.list?part=snippet,statistics,contentDetails`     | Channel, totals and its uploads playlist | 1     |
+| `playlistItems.list?playlistId=<uploads>&maxResults=50`    | Video ids, newest first, with page token | 1     |
+| `videos.list?part=snippet,statistics,status&id=<up to 50>` | Each video's details and statistics      | 1     |
+
+Channels are looked up by handle (`forHandle=@name`) or channel id (`id=UC…`); channel links of both kinds are accepted.
+
+### Fields used
+
+| Data API field                          | Scopie                                 | Notes                                                                                    |
+| --------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `id`, `snippet.customUrl`               | `external_id`, handle                  | The channel id is checked on every observation                                           |
+| `snippet.title`, `snippet.description`  | `profile_snapshots`                    | A new snapshot only when something changed                                               |
+| `statistics.subscriberCount`            | `followers` (`yt_subscribers_rounded`) | Rounded by YouTube to 3 significant figures; `hiddenSubscriberCount` → `hidden_by_owner` |
+| `statistics.videoCount`                 | `posts_total` (`posts_total`)          | Public videos only                                                                       |
+| `statistics.viewCount` (channel)        | `views` (`yt_channel_views`)           | Lifetime channel views                                                                   |
+| `snippet.title/description/publishedAt` | posts                                  | Hashtags come from title and description                                                 |
+| `statistics.viewCount` (video)          | `views` (`yt_public_views`)            | Never compared with connected YouTube Analytics views                                    |
+| `statistics.likeCount`                  | `likes` (`likes`)                      | Missing when the owner hides likes → `hidden_by_owner`                                   |
+| `statistics.commentCount`               | `comments` (`comments`)                | Missing when comments are off → `hidden_by_owner`                                        |
+
+Videos that haven't premiered yet (`liveBroadcastContent = upcoming`) are skipped. Live broadcasts are stored as `live`, everything else as `video`.
+
+### Quota
+
+The default quota is 10,000 units a day per Google Cloud project; every call Scopie makes costs 1 unit. A daily observation or a refresh costs 3 units (channel, one page of uploads, its videos), and a backfill up to 41 (20 pages). 30 channels cost about 90 units for daily observations and about 720 for refreshes every 3 hours, plus a one-off backfill of up to about 1,200: well under 10% of the quota on a normal day. When YouTube reports `quotaExceeded`, `dailyLimitExceeded` or `rateLimitExceeded`, the run is retried an hour later and nothing is stored for the gap.
+
+### Not available
+
+| Data                                         | Why                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| Exact subscriber counts                      | The public API rounds them to 3 significant figures                 |
+| Watch time, retention, traffic sources       | YouTube Analytics API; only the channel owner can authorize it      |
+| Audience demographics                        | YouTube Analytics API                                               |
+| Whether a video is a Short                   | Not exposed by the Data API; stored as `video`                      |
+| Subscriber history and earlier video metrics | Only current totals; Scopie builds history from the day it is added |
+| Dislike counts                               | Removed from the public API in 2021                                 |
+
 ## 5. DEMO data
 
-There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics (connected-style for own profiles, Business Discovery-style for public ones), and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
+There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics (connected-style for own profiles, public-API-style for public Instagram profiles and YouTube channels), and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
 
 ## 6. Platform capability matrix (planning)
 
