@@ -43,7 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'analytics',
     icon: BarChart3,
     status: 'planned',
-    phase: 5,
+    phase: 3,
     summary: 'Post performance explorer and side-by-side comparisons.',
     planned: [
       'Filter posts by country, platform, format, pillar and campaign',
@@ -66,7 +66,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'content',
     icon: LayoutGrid,
     status: 'planned',
-    phase: 7,
+    phase: 5,
     summary: 'Content hub for ideas, drafts and published content.',
     planned: [
       'Content items with caption, platform, country, pillar, format and campaign',
@@ -80,7 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'calendar',
     icon: Calendar,
     status: 'planned',
-    phase: 8,
+    phase: 5,
     summary: 'Month, week and list views of planned and published content.',
     planned: [
       'Filter by country, platform, owner, status, pillar and campaign',
@@ -93,7 +93,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'approvals',
     icon: CheckSquare,
     status: 'planned',
-    phase: 9,
+    phase: 6,
     summary: 'Review queue, comments and approval history.',
     planned: [
       'Submit content for review',
@@ -107,7 +107,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'strategy',
     icon: Target,
     status: 'planned',
-    phase: 10,
+    phase: 7,
     summary: 'Strategies per market with objectives, pillars and KPIs.',
     planned: [
       'Objectives and KPIs per country or region',
@@ -121,7 +121,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'benchmarks',
     icon: Trophy,
     status: 'planned',
-    phase: 6,
+    phase: 4,
     summary: 'Benchmark groups and rankings on clearly named metrics.',
     planned: [
       'Rank countries, accounts and competitors',
@@ -134,7 +134,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'reports',
     icon: FileText,
     status: 'planned',
-    phase: 13,
+    phase: 9,
     summary: 'Weekly social intelligence reports.',
     planned: [
       'Automatic weekly report every Monday',
@@ -147,7 +147,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'insights',
     icon: Sparkles,
     status: 'planned',
-    phase: 11,
+    phase: 8,
     summary: 'Evidence-backed insights and recommendations from your own data.',
     planned: [
       'Detect meaningful changes, anomalies and trends',
@@ -161,7 +161,7 @@ export const NAV_ITEMS: NavItem[] = [
     segment: 'productivity',
     icon: Timer,
     status: 'planned',
-    phase: 15,
+    phase: 11,
     summary: 'Team workflow insights from Scopie data only. No employee surveillance.',
     planned: ['Approval cycles and time in review', 'Publishing consistency and strategy coverage'],
   },

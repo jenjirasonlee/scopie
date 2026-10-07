@@ -1,65 +1,82 @@
 # Scopie — Database Design
 
-> PostgreSQL on Supabase. Status: §3 and §4 (except connections/credentials) are implemented in Phase 1; the rest is the target design. Last updated: 2026-10-06
+> PostgreSQL on Supabase. Status: §3, §4 and §5 are implemented (Phases 1 and 2); §6 onward is the target design for later phases. Last updated: 2026-10-07
 
-## 0. Implemented in Phase 1
+## 0. What is implemented
 
-Migrations: `supabase/migrations/20261006000100_tenancy_and_roles.sql`, `…000200_social_accounts.sql`.
+Migrations:
 
-| Table                                     | Notes                                                                                                                                                                                                                                         |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `permissions`, `role_permissions`         | Permission matrix as data (§7). Read-only for users.                                                                                                                                                                                          |
-| `profiles`                                | Created by trigger on sign-up; stores `email` (mirrors auth, not user-editable), `full_name`, `timezone`. Visible to yourself and people who share an organization.                                                                           |
-| `organizations`                           | Created only through `create_organization()` (makes the caller OWNER). `is_demo` flags demo orgs.                                                                                                                                             |
-| `organization_members`                    | Role per user. Only OWNERs grant/change/remove OWNER. An organization always keeps one owner, except when an owner's whole user account is deleted (the organization is then left ownerless and must be reassigned by an operator).           |
-| `platforms`, `countries`                  | Global reference data (8 platforms, all `planned`; ~55 ISO countries).                                                                                                                                                                        |
-| `social_accounts`                         | As §4, plus `notes`, `created_by`. Users can't set `connection_status`, `primary_data_source`, `last_successful_sync_at` (trigger). No delete: deactivate instead. Owner must be a member. Unique handle per org+platform (case-insensitive). |
-| `account_groups`, `account_group_members` | `kind` is `region` or `custom` (country uses the account column). No UI yet.                                                                                                                                                                  |
-| `activity_log`                            | Written by triggers on accounts, memberships and organization updates.                                                                                                                                                                        |
+- `supabase/migrations/20261006000100_tenancy_and_roles.sql` and `…000200_social_accounts.sql` (Phase 1, Foundation)
+- `supabase/migrations/20261007000100_data_pipeline.sql` (Phase 2, Real social data pipeline)
 
-Not yet created: `platform_connections`, `connection_credentials` (Phase 4) and everything in §5 onward.
+Phase 1:
+
+| Table                                     | Notes                                                                                                                                                                                                                               |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `permissions`, `role_permissions`         | Permission matrix as data (§7). Read-only for users.                                                                                                                                                                                |
+| `profiles`                                | Created by trigger on sign-up; stores `email` (mirrors auth, not user-editable), `full_name`, `timezone`. Visible to yourself and people who share an organization.                                                                 |
+| `organizations`                           | Created only through `create_organization()` (makes the caller OWNER). `is_demo` flags demo orgs; only demo orgs may hold `demo` data (§5.5).                                                                                       |
+| `organization_members`                    | Role per user. Only OWNERs grant/change/remove OWNER. An organization always keeps one owner, except when an owner's whole user account is deleted (the organization is then left ownerless and must be reassigned by an operator). |
+| `platforms`, `countries`                  | Global reference data (8 platforms; ~55 ISO countries).                                                                                                                                                                             |
+| `social_accounts`                         | §4. Users can't set connection fields (trigger). No delete: deactivate instead. Owner must be a member. Unique handle per org+platform (case-insensitive).                                                                          |
+| `account_groups`, `account_group_members` | `kind` is `region` or `custom` (country uses the account column). No UI yet.                                                                                                                                                        |
+| `activity_log`                            | Written by triggers on accounts, memberships, organization updates, platform connections and import batches.                                                                                                                        |
+
+Phase 2:
+
+| Table / object                                                              | Section |
+| --------------------------------------------------------------------------- | ------- |
+| `platform_account_types`, `platforms.reporting_timezone`                    | §4      |
+| `platform_connections`, `connection_credentials`, `connection_assets`       | §4.1    |
+| `metric_definitions`, `platform_metric_map`                                 | §5.1    |
+| `posts`, `post_media`, `post_audiences`                                     | §5.2    |
+| `content_pillars`, `content_formats`, `campaigns`, `audiences`, `cta_types` | §5.3    |
+| `post_metric_snapshots`, `account_metric_snapshots`                         | §5.4    |
+| Views `post_metrics_latest`, `post_metrics_at_age`, `account_metrics_daily` | §5.7    |
+| `import_batches`                                                            | §5.8    |
+| `sync_state`, `sync_runs`, `sync_run_events`, `raw_payloads`                | §8.1    |
+| RPCs `link_connection_asset`, `unlink_social_account`, …                    | §8.2    |
+
+Not yet created: invitations, notifications, everything content/approval/strategy beyond the minimal taxonomy (§6), benchmarks, AI and reports (§8.3).
+
+How data moves through these tables end to end (sync schedule, failure handling) is in [DATA_PIPELINE.md](DATA_PIPELINE.md); what each metric means is in [METRICS.md](METRICS.md).
 
 ## 1. Conventions
 
-- Primary keys: `id uuid default gen_random_uuid()`.
-- Every tenant-owned table has `organization_id uuid not null references organizations(id) on delete cascade`, indexed, and RLS enabled.
+- Primary keys: `id uuid default gen_random_uuid()` (fact tables use `bigint generated always as identity`).
+- Every tenant-owned table has `organization_id uuid not null references organizations(id) on delete cascade` (or a composite FK that implies it), and RLS enabled.
+- Child rows reference their parent with a **composite FK `(parent_id, organization_id)`** against a `unique (id, organization_id)` on the parent, so a row can never point at another organization's data.
 - Timestamps: `created_at timestamptz default now()`, `updated_at timestamptz` (trigger-maintained). All stored in UTC; display converts to the account's or org's timezone.
-- Enumerations: Postgres `enum` types for stable state machines (status, role); lookup tables for user-editable taxonomies (pillars, formats).
-- Soft delete only where history matters (`archived_at`); otherwise hard delete with cascades.
-- Metric values: `numeric` (not float) for counts and rates; `bigint` acceptable for pure counts in snapshots.
-- Raw platform payloads: `jsonb`, kept in separate tables so hot tables stay narrow.
+- Enumerations: Postgres `enum` types for stable state machines (status, role, availability, data source); lookup tables for user-editable taxonomies (pillars, formats, campaigns).
+- Soft delete only where history matters (deactivate accounts, `removed_at` on posts); otherwise hard delete with cascades.
+- Metric values: `numeric`, never negative, never a stand-in zero for a missing value.
+- Raw platform payloads: `jsonb`, in `raw_payloads`, so hot tables stay narrow.
+- Fields only trusted server code may set are protected by `before insert/update` triggers that check `is_end_user()`; the service role (sync worker, OAuth callback, seed script) bypasses them.
 
 ## 2. Entity overview
 
 ```
 organizations ─┬─ organization_members ── auth.users (profiles)
-               ├─ invitations
                ├─ account_groups ── account_group_members ─┐
-               ├─ social_accounts ─────────────────────────┘
-               │     ├─ platform_connections ── connection_credentials (service-role only)
+               ├─ platform_connections ─┬─ connection_credentials (service-role only)
+               │                        └─ connection_assets ──(linked_account_id)──┐
+               ├─ social_accounts ──────────────────────────────────────────────────┘
                │     ├─ account_metric_snapshots
-               │     ├─ account_daily_stats (rollup)
+               │     ├─ sync_state, sync_runs ── sync_run_events, raw_payloads
+               │     ├─ import_batches
                │     └─ posts ─┬─ post_media
+               │               ├─ post_audiences ── audiences
                │               ├─ post_metric_snapshots
-               │               ├─ post_latest_metrics (rollup)
-               │               └─ post_tags (pillar/format/campaign/audience/topic)
-               ├─ content_pillars, content_formats, campaigns, audiences, topics
-               ├─ content_items ─┬─ content_versions ── content_assets
-               │                 ├─ content_comments
-               │                 └─ content_reviews
-               ├─ strategies ─┬─ strategy_objectives (KPIs)
-               │              ├─ strategy_pillars
-               │              └─ strategy_scopes (country/groups)
-               ├─ benchmark_groups ── benchmark_group_members
-               ├─ sync_runs ── sync_run_events
-               ├─ raw_payloads
-               ├─ ai_generations ─┬─ ai_insights
-               │                  └─ ai_recommendations
-               ├─ reports ── report_sections
-               ├─ notifications
+               │               └─ pillar / campaign / content_format / cta_type (FK columns)
+               ├─ content_pillars, content_formats, campaigns, audiences, cta_types
                └─ activity_log
 
-Global (not tenant-owned): platforms, metric_definitions, platform_metric_map, countries
+Global (not tenant-owned): platforms, platform_account_types, countries,
+                           metric_definitions, platform_metric_map
+Read models (views): post_metrics_latest, post_metrics_at_age, account_metrics_daily
+
+Planned: invitations, content_items/versions/reviews, strategies, benchmark_groups,
+         ai_generations/insights/recommendations, reports, notifications
 ```
 
 ## 3. Identity, tenancy and roles
@@ -89,7 +106,7 @@ create table organization_members (
   primary key (organization_id, user_id)
 );
 
-create table invitations (
+create table invitations (             -- planned, not yet created
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations on delete cascade,
   email citext not null, role org_role not null,
@@ -113,10 +130,21 @@ Typical policy: `using (is_org_member(organization_id))` for select; `with check
 ## 4. Platforms and social accounts
 
 ```sql
-create table platforms (               -- global, seeded
-  key text primary key,                -- 'instagram','facebook','linkedin','youtube','tiktok','x','reddit','discord'
+create type platform_connector_status as enum ('available','planned','demo_only');
+
+create table platforms (                -- global, seeded
+  key text primary key,                 -- 'instagram','facebook','linkedin','youtube','tiktok','x','reddit','discord'
   name text not null,
-  connector_status text not null       -- 'available','planned','demo_only'
+  connector_status platform_connector_status not null default 'planned',
+  reporting_timezone text,              -- calendar the platform's daily numbers use
+  sort_order int not null default 100
+);
+
+create table platform_account_types (   -- global, seeded: which account types each platform has
+  platform_key text references platforms on delete cascade,
+  key text not null,                    -- 'business','creator','page','company_page','channel','community',…
+  label text not null,
+  primary key (platform_key, key)
 );
 
 create table countries (code char(2) primary key, name text not null);  -- ISO 3166-1
@@ -124,15 +152,15 @@ create table countries (code char(2) primary key, name text not null);  -- ISO 3
 create type account_connection_status as enum
   ('not_connected','connected','needs_reauth','error','demo');
 create type data_source as enum
-  ('live_api','public_api','manual','import','demo');
+  ('authenticated','public','manual','imported','demo');
 
 create table social_accounts (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations on delete cascade,
   platform_key text not null references platforms,
+  display_name text not null, handle text,
   external_id text,                     -- platform's account/page/channel id
-  handle text, display_name text not null,
-  account_type text,                    -- 'business','creator','page','channel','company_page','server'…
+  account_type text,                    -- FK (platform_key, account_type) → platform_account_types
   country_code char(2) references countries,
   language text,                        -- BCP 47
   timezone text,
@@ -142,226 +170,278 @@ create table social_accounts (
   connection_status account_connection_status not null default 'not_connected',
   primary_data_source data_source not null default 'manual',
   last_successful_sync_at timestamptz,
-  created_at timestamptz default now(),
-  unique (organization_id, platform_key, external_id)
-);
-
-create table account_groups (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references organizations on delete cascade,
-  name text not null, kind text not null  -- 'country','region','custom'
-);
-create table account_group_members (
-  group_id uuid references account_groups on delete cascade,
-  social_account_id uuid references social_accounts on delete cascade,
-  primary key (group_id, social_account_id)
+  tracking_started_at timestamptz,      -- when Scopie first linked it to a connection
+  history_available_from date,          -- oldest post the backfill reached
+  connection_id uuid references platform_connections on delete set null,
+  notes text, created_by uuid, created_at timestamptz, updated_at timestamptz,
+  unique (id, organization_id),
+  unique (id, organization_id, platform_key)
 );
 ```
+
+- **Connector status mirrors code.** `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`) is the source of truth for which platforms have a live connector; the migration sets `connector_status = 'available'` for exactly those (Instagram, Facebook) and `tests/integration/pipeline.test.ts` asserts the two match. There is no `demo` platform: demo data is a data source, not a platform.
+- **Reporting timezone.** Instagram, Facebook and YouTube report daily values on Pacific time (`America/Los_Angeles`). For Meta, a daily value's report date is its `end_time` minus 12 hours (`metaReportDate()` in `lib/platforms/meta/shared.ts`), which lands inside the reported day in both PST and PDT.
+- **Account types** are validated per platform by the FK to `platform_account_types`, so an Instagram account can't be typed `page`.
+- **Protected fields.** A trigger stops users from setting `connection_status`, `primary_data_source`, `last_successful_sync_at`, `tracking_started_at`, `history_available_from`, `connection_id` and `created_by`. Once an account is connected, users also can't change its `external_id` or `platform_key`: its identity comes from the platform. An account becomes connected only through `link_connection_asset()` (§8.2).
+- Unique `(organization_id, platform_key, lower(handle))` and `(organization_id, platform_key, external_id)`, both partial (when not null). No delete policy: accounts are deactivated so history survives.
 
 Country is a column (every account has exactly one) **and** groups exist for regions and custom sets. "Country vs country" uses the column; "region vs region" uses groups.
 
-### Connections and credentials
+### 4.1 Connections and credentials
 
-One OAuth grant often covers several accounts (one Meta login → many Pages and IG accounts). So connections are separate from accounts.
+One OAuth grant covers several accounts (one Meta login → many Pages and Instagram accounts), so connections are separate from accounts.
 
 ```sql
+create type connection_status as enum ('active','needs_reauth','revoked','error');
+
 create table platform_connections (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations on delete cascade,
-  platform_key text not null references platforms,
-  connected_by uuid references profiles,
-  external_user_id text,                -- id of the authorizing platform user
-  granted_scopes text[] not null default '{}',
-  status account_connection_status not null,
-  token_expires_at timestamptz,
-  last_error text, last_error_at timestamptz,
-  created_at timestamptz default now()
+  provider text not null,               -- 'meta','google','linkedin','tiktok','x','reddit','discord'
+  external_user_id text not null,       -- the authorizing platform user
+  display_name text,
+  status connection_status not null default 'active',
+  scopes text[] not null default '{}',  -- permissions actually granted
+  token_expires_at timestamptz, last_refreshed_at timestamptz, last_error text,
+  connected_by uuid references profiles on delete set null,
+  created_at timestamptz, updated_at timestamptz,
+  unique (organization_id, provider, external_user_id),
+  unique (id, organization_id)
 );
 
-alter table social_accounts add column connection_id uuid references platform_connections on delete set null;
-
-create table connection_credentials (   -- RLS: no policies for authenticated → service role only
-  connection_id uuid primary key references platform_connections on delete cascade,
-  organization_id uuid not null,
-  ciphertext bytea not null,            -- AES-256-GCM of JSON {access_token, refresh_token, …}
-  iv bytea not null, auth_tag bytea not null,
+create table connection_credentials (   -- no RLS policies, all grants revoked: service role only
+  id uuid primary key default gen_random_uuid(),
+  connection_id uuid not null, organization_id uuid not null,   -- FK → platform_connections, cascade
+  asset_external_id text,               -- null = the user token; else the asset (Facebook Page) it belongs to
+  ciphertext text not null,             -- "v<keyVersion>:<iv>:<tag>:<ciphertext>", AES-256-GCM
   key_version int not null,
-  updated_at timestamptz default now()
+  expires_at timestamptz,
+  updated_at timestamptz
+);  -- unique (connection_id, asset_external_id) nulls not distinct
+
+create table connection_assets (        -- accounts the connection can see
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null, connection_id uuid not null,   -- FK → platform_connections, cascade
+  platform_key text not null references platforms,
+  external_id text not null, name text, handle text, account_type text,
+  parent_external_id text,              -- e.g. the Facebook Page an Instagram account is linked to
+  linked_account_id uuid references social_accounts on delete set null,
+  discovered_at timestamptz,
+  unique (connection_id, platform_key, external_id)
 );
 ```
 
-This replaces the brief's `api_connections`, `oauth_tokens` and `social_account_connections` with two tables that match how OAuth actually works.
+Members can read `platform_connections` and `connection_assets` (never tokens); only the service role writes them. Tokens are encrypted by `lib/crypto/tokens.ts` with `SCOPIE_ENCRYPTION_KEY`, which never touches the database; `key_version` allows key rotation. Instagram accounts use the token of the Page they are linked to, so only the user token and one token per Page are stored. See [API_INTEGRATIONS.md](API_INTEGRATIONS.md) §3.
 
 ## 5. Universal social data model
+
+The rules below are enforced in the database, not only in `lib/ingest/ingest.ts` (the single write path for sync, CSV import and the demo generator), so a bug in one writer can't store bad data.
 
 ### 5.1 Metric dictionary (global)
 
 ```sql
-create type metric_scope as enum ('account','post');
-create type metric_kind  as enum ('count','rate','duration_seconds','ratio');
+create type metric_unit        as enum ('count','percent','seconds');
+create type metric_aggregation as enum ('sum','last','recompute','not_additive');
+create type metric_scope       as enum ('account','post');
 
 create table metric_definitions (
-  key text primary key,                 -- 'reach','impressions','views','likes','reactions','comments',
-                                        -- 'shares','saves','clicks','link_clicks','video_views','watch_time',
-                                        -- 'avg_watch_duration','completion_rate','followers','following',
-                                        -- 'subscribers','profile_views','engagements', …
-  scope metric_scope not null,
-  kind metric_kind not null,
+  key text primary key,                 -- 'followers','reach','views','interactions','engagement_rate_reach', …
   label text not null,
-  definition text not null,             -- shown in UI tooltip
+  definition text not null,             -- shown in UI tooltips
+  unit metric_unit not null,
+  aggregation metric_aggregation not null,   -- how values combine across days/posts/accounts
+  higher_is_better boolean not null,
+  applies_to_accounts boolean not null, applies_to_posts boolean not null,
   is_derived boolean not null default false,
-  formula text                          -- for derived metrics, human-readable
+  formula text,                         -- required when derived
+  inputs text[] not null default '{}',
+  sort_order int not null
 );
 
 create table platform_metric_map (
   platform_key text references platforms,
-  source_metric text not null,          -- exact name in platform API, e.g. 'total_interactions'
-  api_version text,                     -- e.g. Graph API 'v23.0'
-  metric_key text references metric_definitions,
   scope metric_scope not null,
-  comparability_class text not null,    -- see 5.4
+  source_metric text not null,          -- exact platform name, e.g. 'total_interactions', 'saved'
+  metric_key text not null references metric_definitions,
+  comparability_class text not null,    -- see 5.6
+  api_version text,
+  value_transform text,                 -- null or 'ms_to_seconds'
   notes text,
-  primary key (platform_key, source_metric, scope)
+  primary key (platform_key, scope, source_metric)
 );
 ```
 
-`platform_metric_map` is data, not code, so the UI can explain "Instagram `views` → Scopie `views` (class: `meta_views`)".
+23 metrics are seeded. `lib/metrics/registry.ts` mirrors both tables (`METRIC_DEFINITIONS`, `PLATFORM_METRIC_MAP`); an integration test asserts they match. Both are read-only for users. The full dictionary is in [METRICS.md](METRICS.md).
+
+**Derived metrics are computed, never stored.** `follower_change`, `follower_growth_rate`, `posts_published` and the three engagement rates are `is_derived`; the snapshot trigger rejects them. Reach is `not_additive`: it can't be summed across days, posts or accounts.
 
 ### 5.2 Posts
 
 ```sql
+create type media_format    as enum ('image','carousel','short_video','long_video','video','text','link','story','live','other');
+create type tag_source      as enum ('content_item','manual','imported','ai_suggested','ai_confirmed');
+create type language_source as enum ('declared','account_default','detected');
+
 create table posts (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
-  social_account_id uuid not null references social_accounts on delete cascade,
-  platform_key text not null,
+  social_account_id uuid not null, platform_key text not null,  -- FK (id, org, platform) → social_accounts
   external_id text not null,
   permalink text,
   published_at timestamptz not null,
-  native_type text,                      -- platform's own type: 'REELS','CAROUSEL_ALBUM','IMAGE','VIDEO','link','short'…
-  format_id uuid references content_formats,   -- Scopie's normalized format (Reel, Carousel, Static, Short video…)
-  caption text,
-  language text,
-  content_item_id uuid references content_items on delete set null,  -- link back to planned content
+  published_local_date date not null,   -- set by trigger in the account's (or org's) timezone
+  media_format media_format not null default 'other',   -- objective format, from the platform
+  native_type text,                     -- platform's own type, e.g. 'REELS/VIDEO', 'added_video'
+  caption text, caption_updated_at timestamptz,
+  language text, language_source language_source,
+  country_code char(2) references countries,           -- defaults to the account's country
+  content_format_id uuid, content_format_source tag_source,  -- editorial format (org taxonomy)
+  pillar_id uuid,   pillar_source tag_source,
+  campaign_id uuid, campaign_source tag_source,
+  cta_type_id uuid, cta_text text, cta_source tag_source,
+  is_paid boolean,                      -- null = unknown
+  is_shared_post boolean not null default false,   -- e.g. an Instagram collab post on two accounts
+  removed_at timestamptz,
   data_source data_source not null,
-  created_at timestamptz default now(),
-  unique (social_account_id, external_id)
+  import_batch_id uuid,
+  first_fetched_at timestamptz, last_fetched_at timestamptz, last_metrics_at timestamptz,
+  created_at timestamptz, updated_at timestamptz,
+  unique (social_account_id, external_id),
+  unique (id, organization_id)
 );
 
-create table post_media (
-  id uuid primary key default gen_random_uuid(),
-  post_id uuid not null references posts on delete cascade,
-  organization_id uuid not null,
-  position int not null, media_type text, thumbnail_url text, duration_seconds numeric
+create table post_media (               -- carousel children etc.; written only by the server
+  id uuid primary key, organization_id uuid not null, post_id uuid not null,
+  position int not null, media_type text not null, external_id text,
+  duration_seconds numeric, width int, height int,
+  unique (post_id, position)
 );
 
-create table post_tags (                 -- metadata for content intelligence
-  post_id uuid references posts on delete cascade,
-  organization_id uuid not null,
-  tag_type text not null,                -- 'pillar','campaign','audience','topic','cta'
-  tag_id uuid,                           -- fk resolved by tag_type (pillar/campaign/audience/topic)
-  value text,                            -- for free-text tags like CTA
-  source text not null,                  -- 'content_item','manual','ai_suggested'
-  primary key (post_id, tag_type, coalesce(tag_id::text, value))
+create table post_audiences (           -- many-to-many: a post can target several audiences
+  post_id uuid, audience_id uuid, organization_id uuid not null,
+  source tag_source not null default 'manual',
+  primary key (post_id, audience_id)
 );
 ```
 
-(The last `primary key` is illustrative; implemented as a unique index on the expression.)
+- Posts store their **own** country and language, so moving an account to another market later doesn't rewrite history. The trigger fills them from the account when not given (`language_source = 'account_default'`).
+- `media_format` (what the platform says it is) is separate from `content_format_id` (the team's editorial format, e.g. "Product demo").
+- Pillar, campaign, CTA, content format and audiences are real FK columns (composite with `organization_id`), each with a `*_source` saying who set it.
+- **Users may only tag posts** (`content.edit`, EDITOR+). On update, the trigger keeps every platform field (caption, dates, format, source…) and sets the changed tag's source to `manual`. Users can insert posts only as `imported` or `manual`, and can't delete posts.
 
-### 5.3 Metric snapshots (append-only facts)
+### 5.3 Minimal content taxonomy
+
+`content_pillars`, `content_formats`, `campaigns` (+ `starts_on`, `ends_on`), `audiences` and `cta_types`: each is `(id, organization_id, name, description, is_active, created_at)` with a case-insensitive unique name per org. Members read; `strategy.manage` (MANAGER+) writes; no deletes (deactivate). The full content hub (§6) builds on these.
+
+### 5.4 Metric snapshots (append-only facts)
 
 ```sql
+create type metric_availability as enum ('available','not_permitted','not_applicable','pending','error');
+create type metric_period       as enum ('lifetime','day');
+
 create table post_metric_snapshots (
-  id bigint generated always as identity,
-  organization_id uuid not null,
-  post_id uuid not null references posts on delete cascade,
+  id bigint generated always as identity primary key,
+  organization_id uuid not null, post_id uuid not null,   -- FK (post_id, org) → posts, cascade
   metric_key text not null references metric_definitions,
-  source_metric text not null,           -- exact platform name
-  value numeric,                         -- null = requested but not returned
-  availability text not null,            -- 'available','unavailable','not_supported','permission_missing','error'
+  source_metric text not null,          -- exact platform name
+  value numeric,                        -- set only when available; never negative
+  availability metric_availability not null,
   data_source data_source not null,
-  metric_date date,                      -- for daily-breakdown metrics; null for lifetime
-  period text not null,                  -- 'lifetime','day','week','28d'
+  period metric_period not null default 'lifetime',
+  metric_date date,                     -- required for 'day', null for 'lifetime'
   captured_at timestamptz not null,
-  sync_run_id uuid,
-  primary key (post_id, captured_at, metric_key, id)
-);
+  post_age_hours int not null,          -- set by trigger: captured_at − published_at
+  sync_run_id uuid references sync_runs on delete set null,
+  import_batch_id uuid,
+  created_at timestamptz
+);  -- unique (post_id, metric_key, period, metric_date, captured_at) nulls not distinct
 
 create table account_metric_snapshots (
-  id bigint generated always as identity,
-  organization_id uuid not null,
-  social_account_id uuid not null references social_accounts on delete cascade,
+  id bigint generated always as identity primary key,
+  organization_id uuid not null, social_account_id uuid not null,
   metric_key text not null references metric_definitions,
   source_metric text not null,
-  value numeric,
-  availability text not null,
+  value numeric, availability metric_availability not null,
   data_source data_source not null,
+  period metric_period not null,        -- 'day' = value for metric_date; 'lifetime' = running total as of metric_date
   metric_date date not null,
-  period text not null,
   captured_at timestamptz not null,
-  sync_run_id uuid,
-  primary key (social_account_id, metric_date, metric_key, id)
+  sync_run_id uuid, import_batch_id uuid, created_at timestamptz
+);  -- unique (social_account_id, metric_key, period, metric_date, captured_at)
+```
+
+- **Narrow rows**: one metric per row, so a new metric needs no schema change.
+- **Value and availability agree**: a check constraint requires `value is not null` exactly when `availability = 'available'`. A metric the platform didn't return is a row with a reason, never a zero.
+- **Duplicate guard**: the unique indexes above make re-running a batch with the same `captured_at` a no-op (ingest uses `on conflict do nothing`).
+- **Append-only**: users may insert (imports) but nobody may update or delete through the API.
+- The guard trigger rejects derived metrics, post-only metrics on accounts (and vice versa), and snapshots captured before the post was published; it sets `post_age_hours`.
+
+Why snapshots: post metrics keep growing for days after publishing. Capturing at fixed ages (1, 2, 3, 7, 14, 30, 90 days, see DATA_PIPELINE.md) lets us show "reach at 7 days" fairly across posts of different ages, and keeps history if a platform later changes or removes a metric.
+
+### 5.5 Data source rules
+
+Every post and snapshot carries `data_source` (UI labels: `authenticated` → **Live**, `public` → **Public**, `imported` → **Imported**, `manual` → **Manual**, `demo` → **DEMO**). `check_fact_source()`, called from the post and snapshot triggers, enforces:
+
+| Rule                                                                       | Error   |
+| -------------------------------------------------------------------------- | ------- |
+| `demo` only in organizations with `is_demo = true`                         | `42501` |
+| `authenticated` only for accounts with a `connection_id`                   | `42501` |
+| `imported` requires an `import_batch_id`                                   | `23514` |
+| Users (not the service role) may write only `imported` or `manual`         | `42501` |
+| Value present ⇔ `availability = 'available'` (check constraint, snapshots) | `23514` |
+
+So signed-in users can never write `authenticated` (Live) data; only the sync worker can. Nothing writes `public` yet (no public-data connector exists).
+
+### 5.6 Comparability
+
+Each mapped metric has a `comparability_class`. Two values may be compared or summed only if their classes match. Classes in use:
+
+| Class                                                       | Includes                                                                          |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `audience_size`                                             | Instagram `followers_count`, Facebook Page `followers_count`                      |
+| `meta_reach`                                                | Instagram `reach`, Facebook `page_impressions_unique` / `post_impressions_unique` |
+| `meta_views`                                                | Instagram `views` (account and post)                                              |
+| `meta_interactions`                                         | Instagram `total_interactions`                                                    |
+| `likes`, `comments`, `shares`                               | Instagram likes/comments/shares; Facebook comments/shares                         |
+| Platform-specific (`ig_*`, `fb_*`, `meta_followers_gained`) | Comparable only within that platform                                              |
+
+A metric with no mapping (e.g. imported LinkedIn numbers) gets the class `<platform>:<metric>`, so it is only comparable within its own platform (`comparabilityClass()` in `lib/metrics/registry.ts`). The analytics layer that applies these checks arrives in Phase 3; see [METRICS.md](METRICS.md).
+
+### 5.7 Read models
+
+Views (`security_invoker`, so RLS applies) over the snapshot tables. At scale they become incrementally refreshed tables (§9).
+
+| View                    | Returns                                                                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post_metrics_latest`   | Latest lifetime value of each metric per post.                                                                                                                               |
+| `post_metrics_at_age`   | Value of each lifetime metric at post ages 1, 2, 3, 7, 14, 30, 90 days: the snapshot nearest the target age within ±15% (at least ±6 h). No snapshot in the window = no row. |
+| `account_metrics_daily` | Latest captured value per account, metric, period and date (platforms revise recent days).                                                                                   |
+
+### 5.8 Imports
+
+```sql
+create type import_kind   as enum ('account_metrics','posts');
+create type import_status as enum ('processing','completed','completed_with_errors','failed');
+
+create table import_batches (
+  id uuid primary key, organization_id uuid not null,
+  social_account_id uuid not null, platform_key text not null,   -- FK → social_accounts
+  kind import_kind not null, file_name text not null,
+  status import_status not null default 'processing',
+  rows_total int, rows_imported int, rows_skipped int,
+  errors jsonb not null default '[]',
+  created_by uuid default auth.uid(), created_at timestamptz, completed_at timestamptz,
+  unique (id, organization_id)
 );
 ```
 
-Every row records source platform (via account/post), source metric, normalized metric, collection time, metric date, data source and availability, as required.
+CSV import (`lib/imports/`) runs as the signed-in user (`accounts.manage`, ADMIN+): it creates a batch, writes rows through ingest as `imported`, then finishes the batch. A trigger stops users changing a batch's identity fields or a finished batch. Batches are never deleted.
 
-Why snapshots: post metrics keep growing for days after publishing. Re-capturing lets us show "engagement at 7 days" fairly across posts of different ages and keeps history if a platform later changes or removes a metric.
+## 6. Content, approvals, strategy (planned: Phases 5–7)
 
-### 5.4 Comparability
-
-Each mapped metric has a `comparability_class`. Two values may be compared or summed only if their classes match. Examples:
-
-| Class                   | Includes                                                                                            |
-| ----------------------- | --------------------------------------------------------------------------------------------------- |
-| `count_followers`       | IG followers, FB page followers, LinkedIn followers, YouTube subscribers (labelled "Audience size") |
-| `reach_unique_accounts` | IG reach, FB reach (Meta definition: unique accounts)                                               |
-| `meta_views`            | IG/FB `views` (Meta's 2025+ unified views definition)                                               |
-| `youtube_views`         | YouTube views                                                                                       |
-| `interactions_meta`     | likes+comments+shares+saves on Meta                                                                 |
-
-The analytics layer (`lib/analytics/comparability.ts`) checks classes before any cross-platform aggregate. Mixed classes → the metric is shown per platform or "Not comparable".
-
-### 5.5 Rollups (what the UI reads)
+The taxonomy tables already exist in minimal form (§5.3); later phases extend them (e.g. pillar colour, campaign objective) and add `topics`.
 
 ```sql
-create table post_latest_metrics (       -- one row per post, latest value of each key, wide
-  post_id uuid primary key references posts on delete cascade,
-  organization_id uuid not null,
-  social_account_id uuid not null,
-  published_at timestamptz not null,
-  reach numeric, impressions numeric, views numeric, likes numeric, reactions numeric,
-  comments numeric, shares numeric, saves numeric, clicks numeric, link_clicks numeric,
-  video_views numeric, watch_time_seconds numeric, avg_watch_duration_seconds numeric,
-  engagements numeric,                   -- sum of available interactions, per platform definition
-  engagement_rate_reach numeric,         -- engagements / reach * 100, null if reach null
-  data_source data_source not null,
-  updated_at timestamptz not null
-);
-
-create table account_daily_stats (
-  social_account_id uuid not null,
-  organization_id uuid not null,
-  stat_date date not null,
-  followers numeric, follower_delta numeric,
-  reach numeric, impressions numeric, views numeric, profile_views numeric,
-  posts_published int, engagements numeric,
-  data_source data_source not null,
-  primary key (social_account_id, stat_date)
-);
-```
-
-Derived metrics (engagement rate, follower growth %) are computed in **one** place: SQL functions mirrored by `lib/analytics` unit tests that assert both give the same result.
-
-## 6. Content, approvals, strategy
-
-```sql
-create table content_pillars (id uuid pk, organization_id uuid, name text, description text, color text, archived_at timestamptz);
-create table content_formats (id uuid pk, organization_id uuid, name text, platform_key text null, native_types text[]);
-create table campaigns       (id uuid pk, organization_id uuid, name text, starts_on date, ends_on date, objective text);
-create table audiences       (id uuid pk, organization_id uuid, name text, description text);
-create table topics          (id uuid pk, organization_id uuid, name text);
-
 create type content_status as enum
  ('IDEA','DRAFT','IN_REVIEW','CHANGES_REQUESTED','APPROVED','SCHEDULED','PUBLISHED','ANALYSED','REJECTED','ARCHIVED');
 
@@ -373,7 +453,7 @@ create table content_items (
   current_version_id uuid,               -- fk to content_versions, set after insert
   owner_user_id uuid references profiles,
   country_code char(2), platform_keys text[] not null default '{}',
-  pillar_id uuid, format_id uuid, campaign_id uuid, audience_id uuid,
+  pillar_id uuid, content_format_id uuid, campaign_id uuid, audience_id uuid,
   strategy_objective_id uuid,
   source_recommendation_id uuid,         -- if created from an AI recommendation
   planned_publish_at timestamptz, published_at timestamptz,
@@ -464,31 +544,67 @@ create table strategy_competitors(strategy_id uuid, social_account_id uuid);
 | Manage members and roles                      |        |        |         |   ✓   | ✓ (incl. owners) |
 | Delete organization, transfer ownership       |        |        |         |       |        ✓         |
 
-## 8. Benchmarks, sync, AI, reports, system
+## 8. Sync, functions, and later-phase tables
+
+### 8.1 Sync bookkeeping (implemented)
 
 ```sql
-create table benchmark_groups (id uuid pk, organization_id uuid, name text, description text, platform_key text null);
-create table benchmark_group_members (group_id uuid, social_account_id uuid, primary key (group_id, social_account_id));
+create type sync_job_type as enum ('account_daily','posts_incremental','post_metrics_refresh','backfill');
+create type sync_status   as enum ('queued','running','succeeded','partial','failed','cancelled');
+create type sync_trigger  as enum ('schedule','manual','retry');
 
-create type sync_status as enum ('queued','running','succeeded','partial','failed','cancelled');
+create table sync_state (               -- one row per account and job type
+  social_account_id uuid references social_accounts on delete cascade,
+  organization_id uuid not null,
+  job_type sync_job_type not null,
+  cursor jsonb,                         -- e.g. backfill position {after}
+  last_success_at timestamptz, last_attempt_at timestamptz,
+  next_run_after timestamptz,           -- backoff or rate-limit pause
+  consecutive_failures int not null default 0,
+  completed boolean not null default false,   -- backfill reached the end of history
+  primary key (social_account_id, job_type)
+);
+
 create table sync_runs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
-  social_account_id uuid, connection_id uuid, platform_key text not null,
-  job_type text not null,                -- 'profile','posts_incremental','posts_backfill','metrics_refresh'
-  trigger text not null,                 -- 'schedule','manual','retry'
-  status sync_status not null,
-  started_at timestamptz, completed_at timestamptz,
-  records_processed int default 0, records_failed int default 0,
-  cursor jsonb,                          -- incremental sync position
-  error_code text, error_message text,   -- never contains tokens
-  retry_count int default 0, triggered_by uuid
-);
-create table sync_run_events (id bigint identity pk, sync_run_id uuid, organization_id uuid,
-  level text, code text, message text, context jsonb, created_at timestamptz);
-create table raw_payloads (id bigint identity pk, organization_id uuid, sync_run_id uuid,
-  endpoint text, payload jsonb, captured_at timestamptz);   -- retention job deletes > 30 days
+  social_account_id uuid not null references social_accounts on delete cascade,
+  platform_key text not null,
+  job_type sync_job_type not null, trigger sync_trigger not null,
+  status sync_status not null default 'queued',
+  requested_by uuid, attempt int not null default 1,
+  queued_at timestamptz, started_at timestamptz, completed_at timestamptz,
+  records_processed int, records_failed int,
+  error_code text, error_message text   -- never contains tokens (lib/platforms/http.ts redacts)
+);  -- unique (social_account_id, job_type) where status in ('queued','running')
 
+create table sync_run_events (id bigint identity pk, sync_run_id uuid, organization_id uuid,
+  level text check (level in ('info','warning','error')), code text, message text, context jsonb, created_at timestamptz);
+create table raw_payloads (id bigint identity pk, organization_id uuid, sync_run_id uuid,
+  endpoint text, payload jsonb, captured_at timestamptz);   -- deleted after 30 days by the worker
+```
+
+Members can read `sync_state`, `sync_runs` and `sync_run_events`; only the service role writes them. `raw_payloads` is service-role only. The partial unique index means at most one queued or running job per account and job type, so scheduling twice adds nothing. How the jobs run is in [DATA_PIPELINE.md](DATA_PIPELINE.md).
+
+### 8.2 Functions the app calls
+
+`security definer`, permission-checked inside (`accounts.manage`), granted to `authenticated`:
+
+| Function                                      | Does                                                                                                                                                                                                                                         |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `link_connection_asset(asset_id, account_id)` | The only way an account becomes connected. Requires an active connection, matching platform, not a competitor, and the asset not linked elsewhere. Sets `connection_id`, `external_id`, `connected`, `authenticated`, `tracking_started_at`. |
+| `unlink_social_account(account_id)`           | Unlinks the account, sets `not_connected`, cancels its queued runs. Synced data stays, labelled with its original source.                                                                                                                    |
+| `disconnect_platform_connection(target)`      | Deletes the connection's tokens, marks it `revoked`, unlinks its accounts and cancels their queued runs. The app revokes the grant at Meta first (best effort).                                                                              |
+| `request_sync(account_id, job)`               | Queues a manual run for an active, connected account (default `posts_incremental`); returns the existing run if one is already queued or running.                                                                                            |
+
+### 8.3 Planned tables
+
+```sql
+-- Phase 4: Cross-country benchmarking
+create table benchmark_groups (id uuid pk, organization_id uuid, name text, description text, platform_key text null);
+create table benchmark_group_members (group_id uuid, social_account_id uuid, primary key (group_id, social_account_id));
+
+-- Phase 8: AI analyst + recommendations
 create table ai_generations (            -- audit of every model call
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
@@ -508,6 +624,7 @@ create table ai_recommendations (id uuid pk, organization_id uuid, generation_id
   status text default 'open',            -- open, accepted, dismissed, done
   decided_by uuid, decided_at timestamptz, created_at timestamptz);
 
+-- Phase 9: Weekly intelligence reports
 create table reports (id uuid pk, organization_id uuid, kind text, period_start date, period_end date,
   title text, status text, generation_id uuid, data_snapshot jsonb, created_by uuid, created_at timestamptz);
 create table report_sections (id uuid pk, report_id uuid, organization_id uuid, position int,
@@ -515,20 +632,25 @@ create table report_sections (id uuid pk, report_id uuid, organization_id uuid, 
 
 create table notifications (id uuid pk, organization_id uuid, user_id uuid, kind text, payload jsonb,
   read_at timestamptz, created_at timestamptz);
-create table activity_log (id bigint identity pk, organization_id uuid, actor_id uuid, action text,
-  entity_type text, entity_id uuid, diff jsonb, created_at timestamptz);
 ```
 
 ## 9. Indexing and scale plan
 
-- `posts (organization_id, published_at desc)`, `posts (social_account_id, published_at desc)`.
-- `post_latest_metrics (organization_id, published_at desc)` + partial indexes on common sorts.
-- `account_daily_stats (organization_id, stat_date)`.
-- Snapshot tables: BRIN on `captured_at` (cheap, fits append-only); convert to monthly partitions when > ~50M rows.
-- `post_tags (organization_id, tag_type, tag_id)` for content-intelligence filters.
-- `content_items (organization_id, status, planned_publish_at)` for calendar and queue.
+In place:
+
+- `posts (organization_id, published_at desc)`, `(social_account_id, published_at desc)`, `(organization_id, country_code, published_at desc)`, `(organization_id, platform_key, published_at desc)`; partial indexes on `pillar_id` and `campaign_id`.
+- Snapshots: the duplicate-guard unique indexes, `(organization_id, captured_at)` / `(organization_id, metric_date)`, and BRIN on `captured_at` (cheap, fits append-only). `raw_payloads` BRIN on `captured_at`.
+- `sync_runs`: partial index on queued runs by `queued_at`, plus per account and per org.
 - Every RLS policy column (`organization_id`) indexed.
+
+Later:
+
+- Turn the read-model views (§5.7) into incrementally refreshed tables when they get slow, and add daily account rollups for the dashboard (Phase 3).
+- Convert snapshot tables to monthly range partitions when > ~50M rows (no schema change needed).
+- `content_items (organization_id, status, planned_publish_at)` for calendar and queue (Phase 5).
 
 ## 10. Seed data
 
-`supabase/seed/` creates an org "CANNA (DEMO)" with fictional accounts — CANNA Netherlands, Germany, Spain, France, Italy, UK — across Instagram, Facebook, LinkedIn, YouTube, plus two fictional competitors. Generated 180 days of posts and metrics with realistic skew (log-normal engagement, a few outliers, weekly seasonality), content items in every status, an approval history with three versions, one strategy per market, and sample insights. **Every seeded row has `data_source = 'demo'`** and every seeded account name ends with "(DEMO)".
+`pnpm db:seed` (`scripts/seed-demo.ts`, local Supabase only unless `--allow-remote`) creates a demo user and team, an org "CANNA (DEMO)" with `is_demo = true`, fictional accounts for six markets across Instagram, Facebook, LinkedIn, YouTube, TikTok and X, and two fictional competitors. Accounts get `connection_status = 'demo'`, `primary_data_source = 'demo'` and names ending in "(DEMO)".
+
+For the org's own active accounts, `lib/demo/generate.ts` produces 60 days of deterministic daily account metrics and a few posts a week, each measured at 1, 7 and 30 days old. They are written through the same ingest step as real data with `data_source = 'demo'`, which the database accepts only because the org is a demo org. Re-running updates instead of duplicating.

@@ -160,3 +160,58 @@ test('members of one organization get a 404 for another', async ({ page }) => {
   await expect(page.getByText('Page not found')).toBeVisible();
   await expect(page.locator('body')).not.toContainText('Bob E2E');
 });
+
+test('import a CSV of posts and see them, labelled Imported, on the account page', async ({
+  page,
+}) => {
+  const user = await createUser('e2e-import');
+  const org = await createOrg(user, 'Import Org');
+  const { data: account } = await user.client
+    .from('social_accounts')
+    .insert({
+      organization_id: org.id,
+      platform_key: 'linkedin',
+      display_name: 'CANNA LinkedIn Test',
+    })
+    .select('id')
+    .single();
+
+  await signIn(page, user.email);
+  await page.goto(`/${org.slug}/accounts/import`);
+  await page.locator('#accountId:visible').selectOption(account!.id);
+  await page.locator('#kind:visible').selectOption('posts');
+  await page.locator('#file:visible').setInputFiles({
+    name: 'linkedin-export.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from(
+      'Post link,Created date,Post type,Impressions,Reactions\n' +
+        'https://www.linkedin.com/feed/update/urn:li:share:1,2026-09-01,Image,4210,96\n' +
+        'bad-row,not a date,Image,1,1\n',
+    ),
+  });
+  await page.getByRole('button', { name: 'Import' }).click();
+  const result = page.getByTestId('import-result');
+  await expect(result).toContainText('Imported 1 of 2 rows');
+  await expect(result).toContainText('Row 3');
+
+  await page.reload();
+  await expect(page.getByRole('cell', { name: 'linkedin-export.csv' })).toBeVisible();
+
+  await page.goto(`/${org.slug}/accounts/${account!.id}`);
+  await expect(page.getByText('Imported', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Impressions')).toBeVisible();
+  await expect(page.getByText('4,210')).toBeVisible();
+});
+
+test('connections page explains what is missing instead of offering a broken button', async ({
+  page,
+}) => {
+  const user = await createUser('e2e-connections');
+  const org = await createOrg(user, 'Connections Org');
+  await signIn(page, user.email);
+  await page.goto(`/${org.slug}/settings/connections`);
+  await expect(page.getByText('pages_read_engagement')).toBeVisible();
+  // The test environment has no Meta app configured.
+  await expect(page.getByText(/isn.t set up on this server yet/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Connect with Meta' })).toHaveCount(0);
+});

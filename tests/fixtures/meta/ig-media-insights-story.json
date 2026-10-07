@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "name": "reach",
+      "period": "lifetime",
+      "values": [{ "value": 410 }],
+      "title": "Accounts reached",
+      "id": "17900000000000005/insights/reach/lifetime"
+    },
+    {
+      "name": "views",
+      "period": "lifetime",
+      "values": [{ "value": 455 }],
+      "title": "Views",
+      "id": "17900000000000005/insights/views/lifetime"
+    },
+    {
+      "name": "shares",
+      "period": "lifetime",
+      "values": [{ "value": 2 }],
+      "title": "Shares",
+      "id": "17900000000000005/insights/shares/lifetime"
+    },
+    {
+      "name": "total_interactions",
+      "period": "lifetime",
+      "values": [{ "value": 12 }],
+      "title": "Interactions",
+      "id": "17900000000000005/insights/total_interactions/lifetime"
+    }
+  ]
+}

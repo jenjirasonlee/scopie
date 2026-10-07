@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "name": "follower_count",
+      "period": "day",
+      "values": [
+        { "value": 12, "end_time": "2026-10-02T07:00:00+0000" },
+        { "value": 0, "end_time": "2026-10-03T07:00:00+0000" },
+        { "value": 5, "end_time": "2026-10-05T07:00:00+0000" }
+      ],
+      "title": "Follower count",
+      "description": "Total number of unique accounts following this profile",
+      "id": "17840000000000001/insights/follower_count/day"
+    }
+  ],
+  "paging": {
+    "previous": "https://graph.facebook.com/v24.0/17840000000000001/insights?metric=follower_count&period=day&since=1759100400&until=1759273200",
+    "next": "https://graph.facebook.com/v24.0/17840000000000001/insights?metric=follower_count&period=day&since=1759446000&until=1759618800"
+  }
+}

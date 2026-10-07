@@ -1,4 +1,4 @@
-import { CheckCircle2, Plus } from 'lucide-react';
+import { CheckCircle2, Plus, Upload } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ActiveToggle } from '@/components/accounts/active-toggle';
@@ -61,15 +61,23 @@ export default async function AccountsPage({
     <div className="space-y-5">
       <PageHeader
         title="Accounts"
-        description="Social accounts in this organization, grouped by country. Accounts are added manually for now; platform connections arrive in Phase 4."
+        description="Social accounts in this organization, grouped by country. Link accounts to Instagram or Facebook in Settings → Connections, or import a CSV."
         actions={
           canManage ? (
-            <Button asChild>
-              <Link href={`/${orgSlug}/accounts/new`}>
-                <Plus aria-hidden />
-                Add account
-              </Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button asChild variant="outline">
+                <Link href={`/${orgSlug}/accounts/import`}>
+                  <Upload aria-hidden />
+                  Import CSV
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href={`/${orgSlug}/accounts/new`}>
+                  <Plus aria-hidden />
+                  Add account
+                </Link>
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -78,7 +86,8 @@ export default async function AccountsPage({
         <Alert variant="success">
           <CheckCircle2 aria-hidden />
           <AlertDescription>
-            Account added. It shows as “Not connected” until a platform connector exists.
+            Account added. Link it to Instagram or Facebook in Settings → Connections, or import a
+            CSV.
           </AlertDescription>
         </Alert>
       ) : null}

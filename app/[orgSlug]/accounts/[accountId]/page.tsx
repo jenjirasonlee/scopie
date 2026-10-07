@@ -14,6 +14,8 @@ import { CONNECTION_STATUS_HELP, DATA_SOURCE_LABELS } from '@/lib/accounts/label
 import { getAccount } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
 import { getOrgContext } from '@/lib/orgs/queries';
+import { getAccountPipeline, listRecentPosts } from '@/lib/pipeline/queries';
+import { RecentPosts, SyncCard } from '@/components/pipeline/account-data-panels';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -25,9 +27,11 @@ export default async function AccountPage({
   const { orgSlug, accountId } = await params;
   if (!z.uuid().safeParse(accountId).success) notFound();
   const { org, role } = await getOrgContext(orgSlug);
-  const [account, options] = await Promise.all([
+  const [account, options, pipeline, posts] = await Promise.all([
     getAccount(org.id, accountId),
     getAccountFormOptions(org.id),
+    getAccountPipeline(org.id, accountId),
+    listRecentPosts(org.id, accountId),
   ]);
   if (!account) notFound();
   const canManage = can(role, 'accounts.manage');
@@ -64,7 +68,8 @@ export default async function AccountPage({
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-6">
+          <RecentPosts posts={posts} />
           {canManage ? (
             <AccountForm
               action={updateSocialAccount.bind(null, orgSlug, account.id)}
@@ -101,27 +106,36 @@ export default async function AccountPage({
             </Card>
           )}
         </div>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Connection</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-[13px]">
-            <ConnectionStatusBadge status={account.connection_status} />
-            <p className="text-muted-foreground">
-              {CONNECTION_STATUS_HELP[account.connection_status]}
-            </p>
-            <dl className="grid grid-cols-2 gap-y-2 border-t pt-3">
-              <dt className="text-muted-foreground">Data source</dt>
-              <dd>{DATA_SOURCE_LABELS[account.primary_data_source]}</dd>
-              <dt className="text-muted-foreground">Last successful sync</dt>
-              <dd>
-                {account.last_successful_sync_at
-                  ? new Date(account.last_successful_sync_at).toLocaleString('en-GB')
-                  : 'Never'}
-              </dd>
-            </dl>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>Connection</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-[13px]">
+              <ConnectionStatusBadge status={account.connection_status} />
+              <p className="text-muted-foreground">
+                {CONNECTION_STATUS_HELP[account.connection_status]}
+              </p>
+              <dl className="grid grid-cols-2 gap-y-2 border-t pt-3">
+                <dt className="text-muted-foreground">Data source</dt>
+                <dd>{DATA_SOURCE_LABELS[account.primary_data_source]}</dd>
+                <dt className="text-muted-foreground">Last successful sync</dt>
+                <dd>
+                  {account.last_successful_sync_at
+                    ? new Date(account.last_successful_sync_at).toLocaleString('en-GB')
+                    : 'Never'}
+                </dd>
+              </dl>
+            </CardContent>
+          </Card>
+          <SyncCard
+            orgSlug={orgSlug}
+            account={account}
+            runs={pipeline.runs}
+            earliestPostAt={pipeline.earliestPostAt}
+            canManage={canManage}
+          />
+        </div>
       </div>
     </div>
   );

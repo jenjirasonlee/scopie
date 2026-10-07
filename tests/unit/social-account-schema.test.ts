@@ -55,7 +55,7 @@ describe('social account validation', () => {
       ...valid,
       connection_status: 'connected',
       connectionStatus: 'connected',
-      primary_data_source: 'live_api',
+      primary_data_source: 'authenticated',
       last_successful_sync_at: '2026-01-01',
     });
     const row = toSocialAccountRow(parsed);

@@ -56,8 +56,11 @@ export default async function DashboardPage({ params }: { params: Promise<{ orgS
       label: 'Assign a country to every account',
       href: `/${orgSlug}/accounts`,
     },
-    { done: false, label: 'Invite your team', phase: 2 },
-    { done: false, label: 'Connect Instagram and Facebook', phase: 4 },
+    {
+      done: (summary.byConnection.connected ?? 0) > 0,
+      label: 'Connect Instagram and Facebook',
+      href: `/${orgSlug}/settings/connections`,
+    },
   ];
 
   return (
@@ -78,9 +81,9 @@ export default async function DashboardPage({ params }: { params: Promise<{ orgS
         <Info aria-hidden />
         <AlertTitle>Performance analytics aren&apos;t available yet</AlertTitle>
         <AlertDescription>
-          Reach, impressions, engagement and follower metrics will appear here once a platform
-          connector syncs real data (Phases 4 and 5). Scopie never shows estimated or sample numbers
-          in their place.
+          Scopie now collects data from connected Instagram and Facebook accounts and from CSV
+          imports. Charts of reach, engagement and followers arrive with the analytics dashboard
+          (Phase 3). Scopie never shows estimated or sample numbers in their place.
         </AlertDescription>
       </Alert>
 
@@ -171,11 +174,6 @@ export default async function DashboardPage({ params }: { params: Promise<{ orgS
                     ) : (
                       item.label
                     )}
-                    {item.phase ? (
-                      <span className="text-muted-foreground ml-1.5 text-xs">
-                        Phase {item.phase}
-                      </span>
-                    ) : null}
                   </span>
                 </li>
               ))}

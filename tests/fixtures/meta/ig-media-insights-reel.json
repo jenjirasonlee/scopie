@@ -1,0 +1,69 @@
+{
+  "data": [
+    {
+      "name": "reach",
+      "period": "lifetime",
+      "values": [{ "value": 8800 }],
+      "title": "Accounts reached",
+      "id": "17900000000000003/insights/reach/lifetime"
+    },
+    {
+      "name": "views",
+      "period": "lifetime",
+      "values": [{ "value": 12040 }],
+      "title": "Views",
+      "id": "17900000000000003/insights/views/lifetime"
+    },
+    {
+      "name": "likes",
+      "period": "lifetime",
+      "values": [{ "value": 610 }],
+      "title": "Likes",
+      "id": "17900000000000003/insights/likes/lifetime"
+    },
+    {
+      "name": "comments",
+      "period": "lifetime",
+      "values": [{ "value": 44 }],
+      "title": "Comments",
+      "id": "17900000000000003/insights/comments/lifetime"
+    },
+    {
+      "name": "shares",
+      "period": "lifetime",
+      "values": [{ "value": 73 }],
+      "title": "Shares",
+      "id": "17900000000000003/insights/shares/lifetime"
+    },
+    {
+      "name": "saved",
+      "period": "lifetime",
+      "values": [{ "value": 95 }],
+      "title": "Saved",
+      "id": "17900000000000003/insights/saved/lifetime"
+    },
+    {
+      "name": "total_interactions",
+      "period": "lifetime",
+      "values": [{ "value": 822 }],
+      "title": "Interactions",
+      "id": "17900000000000003/insights/total_interactions/lifetime"
+    },
+    {
+      "name": "ig_reels_video_view_total_time",
+      "period": "lifetime",
+      "values": [{ "value": 45678000 }],
+      "title": "Watch time",
+      "description": "Total time the reel was played, in milliseconds.",
+      "id": "17900000000000003/insights/ig_reels_video_view_total_time/lifetime"
+    },
+    {
+      "name": "ig_reels_avg_watch_time",
+      "period": "lifetime",
+      "values": [{ "value": 6250 }],
+      "title": "Average watch time",
+      "description": "Average time spent playing the reel, in milliseconds.",
+      "id": "17900000000000003/insights/ig_reels_avg_watch_time/lifetime"
+    }
+  ]
+}

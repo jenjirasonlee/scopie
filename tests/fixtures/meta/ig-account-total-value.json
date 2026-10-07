@@ -1,0 +1,32 @@
+{
+  "data": [
+    {
+      "name": "reach",
+      "period": "day",
+      "title": "Accounts reached",
+      "total_value": { "value": 3100 },
+      "id": "17840000000000001/insights/reach/day"
+    },
+    {
+      "name": "views",
+      "period": "day",
+      "title": "Views",
+      "total_value": { "value": 5400 },
+      "id": "17840000000000001/insights/views/day"
+    },
+    {
+      "name": "profile_views",
+      "period": "day",
+      "title": "Profile views",
+      "total_value": { "value": 87 },
+      "id": "17840000000000001/insights/profile_views/day"
+    },
+    {
+      "name": "total_interactions",
+      "period": "day",
+      "title": "Content interactions",
+      "total_value": { "value": 260 },
+      "id": "17840000000000001/insights/total_interactions/day"
+    }
+  ]
+}

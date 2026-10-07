@@ -8,6 +8,7 @@ const SECTIONS = [
   { segment: 'profile', label: 'Profile' },
   { segment: 'organization', label: 'Organization' },
   { segment: 'members', label: 'Members & roles' },
+  { segment: 'connections', label: 'Connections' },
 ];
 
 export function SettingsNav() {

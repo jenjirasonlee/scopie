@@ -1,185 +1,205 @@
 # Scopie — Platform Integrations
 
-> Status: Phase 0 design. Last updated: 2026-10-06
+> Status: the Meta connector (Instagram + Facebook Pages) is built (Phase 2). Other platforms are planned (Phase 10) and get data through CSV import until then. Last updated: 2026-10-07
 >
-> **Accuracy rule:** platform APIs change often (metric renames, deprecations, access tiers, pricing). Everything below reflects our understanding at the time of writing and is marked **[verify]** where details must be re-checked against the platform's official documentation when the connector is built. Nothing here may be used to fabricate a metric: if the API doesn't return it, Scopie stores it as unavailable.
+> **Accuracy rule:** platform APIs change often (metric renames, deprecations, access tiers, pricing). Everything below reflects our understanding at the time of writing and is marked **[verify]** where details must be re-checked against the platform's official documentation. Nothing here may be used to fabricate a metric: if the API doesn't return it, Scopie stores it as unavailable, with a reason.
 
-## 1. Three classes of data
+## 1. Classes of data
 
-| Class                         | Meaning                                                                                                                        | How Scopie gets it                                            | Badge          |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | -------------- |
-| **Authenticated first-party** | Analytics for accounts the organization owns, authorized by an account admin via OAuth                                         | Platform insights/analytics APIs                              | `Live`         |
-| **Public**                    | Data the platform's API makes available about accounts we don't own (e.g. competitor follower counts, public post like counts) | Official public endpoints only (no scraping)                  | `Public`       |
-| **Unavailable**               | Metric not offered by the API, not granted, or not for this account type                                                       | Stored as `availability = not_supported / permission_missing` | `N/A` + reason |
+Every stored post and metric carries a `data_source` (DATABASE.md §5.5):
 
-Also: `Manual` (typed in or CSV import, e.g. for a platform without API access) and `DEMO` (seed / mock connector).
+| `data_source`   | Badge      | Meaning                                                                                                                  | How Scopie gets it                                          |
+| --------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `authenticated` | `Live`     | Analytics for accounts the organization owns, authorized by an account admin via OAuth                                   | Platform insights APIs, written only by the sync worker     |
+| `public`        | `Public`   | Data the platform's API makes available about accounts we don't own (e.g. competitor follower counts). **Not built yet** | Official public endpoints only (no scraping)                |
+| `imported`      | `Imported` | Values from a CSV file (platform export or Scopie template)                                                              | Accounts → Import CSV; every row belongs to an import batch |
+| `manual`        | `Manual`   | Typed in by a person                                                                                                     | Reserved; no entry screen yet                               |
+| `demo`          | `DEMO`     | Fictional data for development                                                                                           | `pnpm db:seed`; accepted only in demo organizations         |
+
+A metric that couldn't be read is stored with an `availability` instead of a value: `not_permitted` (scope missing or withheld), `not_applicable`, `pending` (the platform hasn't reported that day yet) or `error`. It is never stored as 0.
 
 ## 2. Connector contract
 
 ```ts
 // lib/platforms/types.ts
-export type PlatformKey =
-  | 'instagram'
-  | 'facebook'
-  | 'linkedin'
-  | 'youtube'
-  | 'tiktok'
-  | 'x'
-  | 'reddit'
-  | 'discord'
-  | 'demo';
-
-export interface ConnectorCapabilities {
-  auth: 'oauth2' | 'api_key' | 'bot_token' | 'none';
-  supportsRefreshToken: boolean;
-  supportsPublicLookup: boolean; // can fetch competitor/public data
-  accountMetrics: MetricCapability[]; // which normalized metrics, from which source metric, which data class
-  postMetrics: MetricCapability[];
-  historyLimitDays?: number; // how far back insights go
-  requiredScopes: { scope: string; purpose: string }[];
-}
-
-export interface MetricCapability {
-  metricKey: string; // Scopie key, e.g. 'reach'
-  sourceMetric: string; // platform's name
-  dataClass: 'first_party' | 'public';
-  comparabilityClass: string;
-  accountTypes?: string[]; // e.g. only 'business'
-}
-
-export interface PlatformConnector {
-  readonly key: PlatformKey;
-  readonly isDemo: boolean; // demo connectors MUST set true
-  capabilities(): ConnectorCapabilities;
-
-  // OAuth (server-only)
-  getAuthorizationUrl(input: { state: string; codeVerifier?: string; redirectUri: string }): URL;
-  exchangeCode(input: {
-    code: string;
-    codeVerifier?: string;
-    redirectUri: string;
-  }): Promise<TokenSet>;
-  refreshToken(tokens: TokenSet): Promise<TokenSet>; // throws NotSupported if platform has no refresh
-  revoke(tokens: TokenSet): Promise<void>;
-
-  // Discovery & health
-  listAuthorizedAccounts(ctx: ConnectorContext): Promise<ExternalAccount[]>; // pages/IG accounts/channels the grant covers
-  validatePermissions(ctx: ConnectorContext): Promise<PermissionReport>; // granted vs required scopes
-  healthCheck(ctx: ConnectorContext): Promise<HealthStatus>;
-
-  // Data
-  getProfile(ctx: AccountContext): Promise<NormalizedProfile>;
-  getPosts(
+export interface PlatformAdapter {
+  readonly platformKey: string;
+  /** Daily account metrics for each complete day in [since, until], plus running totals (e.g. followers) dated asOf. */
+  getAccountMetrics(
     ctx: AccountContext,
-    opts: { since?: Date; cursor?: string },
-  ): Promise<Page<NormalizedPost>>;
-  getPostMetrics(ctx: AccountContext, postIds: string[]): Promise<NormalizedMetric[]>;
-  getProfileMetrics(ctx: AccountContext, range: DateRange): Promise<NormalizedMetric[]>;
-  getAudienceMetrics?(ctx: AccountContext): Promise<NormalizedMetric[]>; // optional, later
-  lookupPublicAccount?(ctx: ConnectorContext, handle: string): Promise<PublicAccountSnapshot>;
+    range: AccountMetricRange,
+  ): Promise<NormalizedAccountMetric[]>;
+  /** Newest posts first. Pass the previous page's cursor to continue. */
+  listPosts(ctx: AccountContext, cursor: string | null): Promise<PostPage>;
+  getPostMetrics(
+    ctx: AccountContext,
+    posts: Pick<NormalizedPost, 'externalId' | 'mediaFormat' | 'nativeType'>[],
+  ): Promise<PostMetricsResult>; // metrics + per-post failures
+  /** Raw responses collected since the last call, kept 30 days for debugging. */
+  drainRawPayloads?(): RawPayload[];
 }
+
+export type AccountContext = {
+  platformKey: string;
+  externalId: string;
+  accessToken: string; // decrypted by the sync worker, in memory only
+  accountType: string | null;
+};
 ```
 
-`connect()` / `disconnect()` from the brief are app-level flows (`lib/platforms/connections.ts`) that use `getAuthorizationUrl`, `exchangeCode`, `listAuthorizedAccounts` and `revoke`, then persist via the encrypted credential store. Connectors never touch the database; they receive a decrypted `TokenSet` inside `ConnectorContext` and return normalized records plus raw payloads. That keeps them pure and fixture-testable.
+Adapters never touch the database. The sync engine (`lib/sync/`) builds the `AccountContext` from encrypted credentials, calls the adapter, and writes the normalized records through `ingest()`. That keeps adapters pure and testable against saved responses (`tests/fixtures/meta/`). OAuth (connect, discover accounts, revoke) is separate from the adapter: `lib/platforms/meta/oauth.ts`, orchestrated by `lib/connections/`.
 
-`NormalizedMetric` always includes `metricKey`, `sourceMetric`, `value | null`, `availability`, `period`, `metricDate`, `capturedAt`, `dataSource`.
+`lib/platforms/registry.ts` is the source of truth for which platforms have a connector (`CONNECTED_PLATFORMS`), which OAuth provider connects each (`PROVIDER_FOR_PLATFORM`) and how to build an adapter (`createAdapter`). The database column `platforms.connector_status` mirrors it, and an integration test checks they match.
 
-### Shared connector infrastructure (`lib/platforms/http.ts`)
+Normalized metrics always carry `metricKey`, `sourceMetric`, `value | null`, `availability`, `period` (`lifetime` or `day`) and `metricDate`. Platform metric names are translated through `PLATFORM_METRIC_MAP` (`lib/metrics/registry.ts`), mirrored in the `platform_metric_map` table.
 
-- Fetch wrapper with timeout, retry on 5xx/network with jittered backoff, and typed errors.
-- Rate-limit awareness: reads platform headers (e.g. Meta `X-Business-Use-Case-Usage`, YouTube quota errors, X `x-rate-limit-*`) and throws `RateLimitError { retryAfter }` so the job system reschedules instead of hammering.
-- URL/body redaction before logging.
-- Zod schemas validate every response; unknown fields are kept in raw payloads, missing fields become `unavailable`, never defaults.
+### Shared connector infrastructure
 
-## 3. OAuth flow
+- **`lib/platforms/http.ts`** — `fetchWithRetry`: 20 s timeout, 3 attempts for network errors and 5xx with jittered exponential backoff (0.5 s, 1 s…); 4xx responses go back to the caller. `redactUrl` / `redactText` strip `access_token`, `client_secret`, `code`, `fb_exchange_token`, `appsecret_proof`, `input_token`, `refresh_token` and anything that looks like a Meta token before a URL or message is logged or stored.
+- **`lib/platforms/errors.ts`** — typed errors; the sync engine decides what to do from the type, never from platform error codes:
 
-1. ADMIN clicks **Connect Instagram/Facebook** → `GET /api/oauth/meta/start`.
-2. Server creates signed `state` (user id, org id, nonce, 10-min expiry) and PKCE verifier if supported, stores verifier server-side, redirects to the platform.
-3. Platform redirects to `/api/oauth/meta/callback?code&state`. Server verifies state, exchanges code, upgrades to long-lived token where applicable.
-4. Tokens encrypted (AES-256-GCM, `TOKEN_ENCRYPTION_KEY`) into `connection_credentials`. `platform_connections` row stores granted scopes and expiry (no token).
-5. `listAuthorizedAccounts` → user picks which accounts to add and sets country/language/owner for each.
-6. Initial backfill job enqueued.
+| Error             | Meaning                                  | What happens                                                   |
+| ----------------- | ---------------------------------------- | -------------------------------------------------------------- |
+| `AuthError`       | Token rejected or expired                | Connection and its accounts → `needs_reauth`; syncing stops    |
+| `PermissionError` | A scope is missing for this request      | That metric is stored as `not_permitted`; not retried          |
+| `RateLimitError`  | Platform asked us to slow down           | Job pauses until `retryAfterSeconds`; work done so far is kept |
+| `ValidationError` | Response didn't match the Zod schema     | Not retried; never turned into default values                  |
+| `TransientError`  | Network failure or 5xx after all retries | Job retried later with backoff                                 |
 
-Lifecycle:
+- **`lib/platforms/meta/graph.ts`** — `GraphClient`: pinned Graph API version (`DEFAULT_GRAPH_VERSION = 'v24.0'`, override with `META_GRAPH_API_VERSION`), `appsecret_proof` on every call, and mapping of Graph error codes to the typed errors. Rate-limit waits come from Meta's `X-Business-Use-Case-Usage` / `X-App-Usage` headers (`estimated_time_to_regain_access`), defaulting to 15 minutes.
 
-- **Expiry:** daily job refreshes tokens expiring within 7 days (where refresh exists). If refresh fails or the platform has no refresh, status → `needs_reauth`, ADMINs notified, accounts show "Reconnect".
-- **Reconnect:** same flow; existing connection row updated, accounts re-linked by `external_id`.
-- **Disconnect:** revoke at platform (best effort), delete credentials, set accounts `not_connected`. Historical data is kept and labelled with its original source.
-- **Missing scopes:** `validatePermissions` lists missing scopes; affected metrics are recorded as `permission_missing`, not zero.
-- Tokens never reach the browser, logs, AI prompts or error messages.
+Failure handling and the sync schedule are described in [DATA_PIPELINE.md](DATA_PIPELINE.md).
+
+## 3. OAuth flow and token lifecycle
+
+1. An OWNER or ADMIN clicks **Connect with Meta** in Settings → Connections → `GET /api/connections/meta/start?org={slug}`.
+2. The server checks `accounts.manage` and that the Meta app, encryption key and service role key are configured. It creates a random `state`, stores it in an httpOnly cookie (10 minutes, scoped to `/api/connections/meta`) and redirects to Meta's OAuth dialog with the scopes in §4.
+3. Meta redirects to `/api/connections/meta/callback?code&state`. The server compares the state (timing-safe), re-checks the user's permission, then (`lib/connections/meta.ts`):
+   - exchanges the code for a short-lived user token, then for a **long-lived user token (~60 days)**;
+   - reads the Meta user, the scopes actually granted, and the Facebook Pages the user manages with their linked Instagram professional accounts;
+   - upserts `platform_connections` (one row per org + Meta user; granted scopes and expiry, no token);
+   - stores the user token and one **Page token per Page** (obtained from the long-lived user token) encrypted in `connection_credentials`; Instagram accounts use their Page's token;
+   - records every discovered Page and Instagram account in `connection_assets`;
+   - auto-links Scopie accounts that already match (same platform ID, or same Instagram handle for an account without one).
+4. The user is sent back to Settings → Connections with how many accounts were found and linked, and any permissions that weren't granted. Other discovered accounts can be linked to a Scopie account from that page (`link_connection_asset`). Competitor accounts can't be linked.
+5. The next scheduled sync picks up the linked accounts (or an admin clicks "Sync now").
+
+**Token security.** Tokens are encrypted at rest with AES-256-GCM (`lib/crypto/tokens.ts`, key `SCOPIE_ENCRYPTION_KEY`, versioned for rotation). `connection_credentials` has no RLS policies and all grants revoked, so only the service role (OAuth callback, disconnect, sync worker) can read it. Tokens are never sent to the browser, never logged, and redacted from error messages.
+
+**Expiry and reconnect.** There is no automatic token refresh. Per Meta's docs, Page tokens obtained from a long-lived user token don't expire on their own but are invalidated when, for example, the user loses their Page role, changes their password or removes the app **[verify]**. When Meta rejects a token, the connection and its accounts are set to `needs_reauth`, syncing stops for them, and Settings → Connections shows **Needs reconnect**. Reconnecting is the same flow, done by the same Facebook user: the existing connection row is updated, new tokens replace the old ones, and accounts waiting on it go back to `connected`.
+
+**Missing scopes.** Granted scopes are stored on the connection and missing ones are shown after connecting. Metrics Meta refuses for lack of permission are stored as `not_permitted`.
+
+**Disconnect.** Revokes the grant at Meta (`DELETE /me/permissions`, best effort), deletes the stored tokens, marks the connection `revoked`, unlinks its accounts and cancels their queued syncs. Data already collected stays, labelled with its original source.
 
 ## 4. First real connector: Meta (Instagram + Facebook Pages)
 
 ### Decision
 
-**Build the Meta connector first**, Instagram as the primary target, Facebook Pages in the same adapter.
+**Meta was built first**, Instagram as the primary target, Facebook Pages in the same OAuth connection.
 
-Reasoning:
+1. **Importance to CANNA:** country marketing accounts for a brand like CANNA are predominantly Instagram and Facebook. **[verify with Jen's account list]**
+2. **One authorization, many accounts:** one Meta login by someone who manages the Pages covers every country's Page and its linked Instagram professional account.
+3. **Mature first-party insights:** reach, views, interactions, saves, follower counts and more at account and post level.
+4. **Access is achievable for an internal tool** (see setup step 7).
 
-1. **Importance to CANNA:** country marketing accounts for a brand like CANNA are predominantly Instagram and Facebook; these are where most of the ~30 accounts and most posting volume are expected to be. **[verify with Jen's account list]**
-2. **One authorization, many accounts:** a single Facebook Login for Business grant by someone with access to CANNA's Meta Business portfolio can cover every country's Page and linked Instagram professional account. That makes the 30-account case realistic in one connection.
-3. **Mature first-party insights:** reach, views, likes, comments, shares, saves, follower counts and more at account and post level.
-4. **Legitimate public competitor data:** Instagram's Business Discovery endpoint returns public fields (followers count, media count, recent media with like/comment counts where not hidden) for other professional accounts.
-5. **Access is achievable for an internal tool:** when the Meta app is owned by (or its testers include) the people who administer the accounts, it can run with standard access while in development/internal use; App Review and Business Verification are needed only to serve other organizations' accounts. **[verify current Meta access-level rules]**
+Alternatives considered: **YouTube** (easy OAuth and public API, less central to CANNA's mix; next connector), **LinkedIn** (company page analytics need Community Management API approval), **TikTok, X, Reddit, Discord** (gated access, paid tiers or limited analytics; see §6).
 
-Alternatives considered:
+### Setting up the Meta connector
 
-- **YouTube** — technically the easiest (Google OAuth, generous public API), but likely less central to CANNA's account mix. Chosen as connector #2.
-- **LinkedIn** — company page analytics require approval for LinkedIn's Community Management API; not reliably obtainable early. Planned, with manual/CSV import meanwhile.
-- **TikTok, X, Reddit, Discord** — gated access, paid tiers, or limited analytics (see §6).
+You need a Meta app and the server environment variables in step 5. Meta's developer UI changes often; if a screen looks different, **check Meta's current docs**.
 
-### Meta technical notes
+1. **Create a Meta app.** Go to [developers.facebook.com](https://developers.facebook.com/) → My Apps → Create app, and choose the **Business** app type. Connect it to your business portfolio if asked.
+2. **Add Facebook Login for Business** to the app (Add product).
+3. **Set the redirect URI.** In Facebook Login for Business → Settings, add this to _Valid OAuth Redirect URIs_:
 
-- Requires Instagram **professional** accounts (Business or Creator). Personal accounts are unsupported and shown as such.
-- Two Instagram login options exist: _Instagram API with Facebook Login_ (IG account linked to a Facebook Page; also unlocks Page insights) and _Instagram API with Instagram Login_. Scopie uses **Facebook Login for Business** so one grant covers both Facebook Pages and Instagram. **[verify]**
-- Expected permissions **[verify exact names at build time]**:
+   ```
+   {NEXT_PUBLIC_SITE_URL}/api/connections/meta/callback
+   ```
 
-| Scope                       | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| `pages_show_list`           | List Pages the user manages               |
-| `pages_read_engagement`     | Read Page posts and engagement            |
-| `read_insights`             | Facebook Page insights                    |
-| `instagram_basic`           | Instagram profile and media               |
-| `instagram_manage_insights` | Instagram account and media insights      |
-| `business_management`       | Access assets via Meta Business portfolio |
+   For local development that is `http://localhost:3000/api/connections/meta/callback`. It must match `NEXT_PUBLIC_SITE_URL` exactly. Meta may require HTTPS for anything other than localhost **[verify]**.
 
-- Tokens: short-lived user token → exchanged for a long-lived user token (~60 days); Page tokens derived from it. For production, a **System User** token in CANNA's Business portfolio is preferable (not tied to one employee). **[verify]**
-- Rate limits: Business Use Case (BUC) limits per app/asset, reported in response headers; connector reads them and backs off.
-- Metric churn: during 2024–2025 Meta consolidated several Instagram/Facebook impression and play metrics into a unified **`views`** metric and deprecated others. Scopie pins metric names per Graph API version in `platform_metric_map`, and treats "views" and legacy "impressions" as **different comparability classes**. **[verify current metric list for the pinned API version]**
-- Stories: story insights are only retrievable for a short window after posting; capturing them reliably needs Meta webhooks or frequent polling. Out of V1; documented as a known gap.
-- History: insights history is limited (account-level time series do not go back indefinitely); the initial backfill pulls what is available and records the earliest date obtained.
+4. **Permissions.** Scopie asks for these (`META_SCOPES` in `lib/platforms/meta/oauth.ts`). All are read-only; Scopie never posts or changes anything on Meta. They are requested with the `scope` parameter of the OAuth dialog, not a Login for Business configuration ID; if Meta requires a configuration for your app, check Meta's current docs.
 
-## 5. Development/demo connector
+   | Permission                  | Why Scopie needs it                                                |
+   | --------------------------- | ------------------------------------------------------------------ |
+   | `pages_show_list`           | List the Facebook Pages you manage                                 |
+   | `pages_read_engagement`     | Read Page posts and their reactions, comments and shares           |
+   | `read_insights`             | Read Page and post insights (reach, impressions)                   |
+   | `instagram_basic`           | Read Instagram profile and posts                                   |
+   | `instagram_manage_insights` | Read Instagram insights (reach, views, saves)                      |
+   | `business_management`       | Find Pages and Instagram accounts owned by your business portfolio |
 
-`lib/integrations/demo/` implements `PlatformConnector` with `isDemo = true`, generating deterministic, seeded data for any platform key. Rules:
+5. **Environment variables** (in `.env.local` for the web app, and in the sync worker's environment, e.g. the Trigger.dev project):
 
-- Every record it produces has `data_source = 'demo'`.
-- Accounts it creates are named "… (DEMO)" and have `connection_status = 'demo'`.
-- The UI shows a persistent "Contains demo data" banner in any view mixing demo data.
-- The demo connector cannot be enabled in an org flagged `production` unless an ADMIN explicitly toggles "allow demo data".
+   | Variable                    | Value                                                                                                                                                                                                |
+   | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `META_APP_ID`               | App settings → Basic → App ID (numeric)                                                                                                                                                              |
+   | `META_APP_SECRET`           | App settings → Basic → App secret. Server-only.                                                                                                                                                      |
+   | `META_GRAPH_API_VERSION`    | Optional, e.g. `v24.0`. Defaults to `DEFAULT_GRAPH_VERSION` in `lib/platforms/meta/graph.ts`. Re-verify metric names when changing it.                                                               |
+   | `SCOPIE_ENCRYPTION_KEY`     | 32 random bytes, base64: `openssl rand -base64 32`. Encrypts tokens. Keep it secret and stable: if it changes or is lost, stored tokens can't be decrypted and every connection must be reconnected. |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API (local: shown by `pnpm db:start`). Server-only; used by the OAuth callback, disconnect and the worker.                                                   |
+
+   Until these are set, Settings → Connections says what is missing and CSV import still works.
+
+6. **Accounts.** Instagram accounts must be **professional** (Business or Creator) and linked to a Facebook Page. The person connecting must manage those Pages.
+7. **Access level.** An app with standard access can be used by people who have a role on the app (admin, developer, tester) for the Pages and Instagram accounts they manage, which fits an internal tool. App Review (advanced access) and Business Verification are needed only to let other businesses connect their assets. Meta changes these rules; **check Meta's current docs** before relying on this.
+8. **Connect.** As an OWNER or ADMIN, open Settings → Connections → **Connect with Meta**, approve, then link any accounts that weren't linked automatically.
+9. **Run the sync worker** (`pnpm sync:worker`, or the Trigger.dev task; see ARCHITECTURE.md §7.2). The worker also needs `NEXT_PUBLIC_SUPABASE_URL`.
+
+### What is collected
+
+From `PLATFORM_METRIC_MAP` (`lib/metrics/registry.ts`). Account metrics are daily unless noted; post metrics are lifetime totals, captured at fixed post ages.
+
+| Platform  | Scope   | Meta metric                                                                    | Scopie metric                                     | Notes                                                                 |
+| --------- | ------- | ------------------------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------- |
+| Instagram | account | `followers_count`                                                              | `followers`                                       | Current total only, recorded as of the day it is read                 |
+| Instagram | account | `follower_count`                                                               | `followers_gained`                                | Daily new followers; recent days only                                 |
+| Instagram | account | `reach`, `views`, `profile_views`, `total_interactions`                        | `reach`, `views`, `profile_views`, `interactions` | Daily totals, one request per day                                     |
+| Instagram | post    | `reach`, `views`, `likes`, `comments`, `shares`, `saved`, `total_interactions` | same keys (`saved` → `saves`)                     | Feed posts, carousels and Reels                                       |
+| Instagram | post    | `ig_reels_video_view_total_time`, `ig_reels_avg_watch_time`                    | `watch_time`, `avg_watch_duration`                | Reels only; milliseconds converted to seconds                         |
+| Facebook  | account | `followers_count`                                                              | `followers`                                       | Current total only                                                    |
+| Facebook  | account | `page_impressions_unique`, `page_post_engagements`                             | `reach`, `interactions`                           | Daily **[verify against current Page Insights metrics]**              |
+| Facebook  | post    | `reactions`, `comments` (summary counts), `shares`                             | `reactions`, `comments`, `shares`                 | Post fields. A post with no shares has no `shares` field; stored as 0 |
+| Facebook  | post    | `post_impressions_unique`, `post_impressions`, `post_clicks`                   | `reach`, `impressions`, `link_clicks`             | **[verify against current Page Insights metrics]**                    |
+
+Daily values use Meta's reporting timezone (Pacific): the report date is `end_time` minus 12 hours. Media formats are mapped from Meta's types (Reels → `short_video`, `CAROUSEL_ALBUM` → `carousel`, etc.); the raw type is kept in `native_type`. If Instagram rejects a batch of insight metrics because one doesn't apply, the adapter retries them one by one so the rest still arrive.
+
+### Known gaps
+
+- **Follower history:** Meta gives only the current follower total, so follower history starts when Scopie starts tracking. Followers lost is not collected.
+- **Insights history is limited:** the first daily sync asks for 28 days of account metrics; older account metrics can only come from CSV import. The post backfill pulls older posts and records the oldest one reached as `history_available_from`; older posts get one lifetime snapshot at their current age, not early-age values.
+- **Stories** are not collected: Scopie lists posts from the Instagram media endpoint and doesn't poll stories, whose insights are only available for a short time after posting **[verify]**.
+- **Impressions on Instagram** are not collected (Meta replaced them with `views` in 2025); Instagram `views` and Facebook `impressions` are different comparability classes. **Facebook video views** and completion rate are not collected.
+- **No public/competitor data** yet (e.g. Instagram Business Discovery); competitor accounts can only get data by CSV import.
+- No audience demographics, no paid/boosted split (`is_paid` stays unknown), no webhooks.
+
+## 5. DEMO data
+
+There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics, and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
 
 ## 6. Platform capability matrix (planning)
 
 Legend: ✓ available · ◐ limited / approval needed · ✗ not available via official API · ? to verify
 
-| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                          | Access hurdle                                                             | Phase                        |
-| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------- |
-| Instagram      | Meta OAuth             | ✓ reach, views, interactions, saves, shares, followers                                                                                  | ◐ Business Discovery: followers, media count, per-post likes/comments for professional accounts | Pro account; App Review for multi-tenant                                  | **4 (first)**                |
-| Facebook Pages | Meta OAuth             | ✓ Page & post insights (subject to Meta deprecations)                                                                                   | ◐ limited public Page fields                                                                    | Page admin; App Review for multi-tenant                                   | 4                            |
-| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: channel subscriber count (rounded), video views/likes/comments                      | Daily quota; Google OAuth verification for public release                 | 14 (#2)                      |
-| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                     | Partner application/approval                                              | 14; manual import until then |
-| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ (Research API is for academic research, not usable here)                                      | App review                                                                | 14                           |
-| X              | OAuth 2.0              | ◐ public + (own, recent) non-public tweet metrics                                                                                       | ◐ public metrics                                                                                | Paid API tier required                                                    | 14 (optional)                |
-| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data                                                                              | Commercial use terms                                                      | later                        |
-| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                               | Bot added by server admin; Server Insights not in public API **[verify]** | later                        |
+| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                                      | Access hurdle                                                             | Phase                     |
+| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------- |
+| Instagram      | Meta OAuth             | ✓ built: reach, views, interactions, likes, comments, shares, saves, followers, Reels watch time (§4)                                   | ◐ Business Discovery: followers, media count, per-post likes/comments for professional accounts (not built) | Pro account; App Review for other businesses                              | **2 ✅**                  |
+| Facebook Pages | Meta OAuth             | ✓ built: followers, Page reach and engagements, post reactions/comments/shares/reach/impressions/clicks (subject to Meta deprecations)  | ◐ limited public Page fields (not built)                                                                    | Page role; App Review for other businesses                                | **2 ✅**                  |
+| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: channel subscriber count (rounded), video views/likes/comments                                  | Daily quota; Google OAuth verification for public release                 | 10 (next)                 |
+| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                                 | Partner application/approval                                              | 10; CSV import until then |
+| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ (Research API is for academic research, not usable here)                                                  | App review                                                                | 10                        |
+| X              | OAuth 2.0              | ◐ public + (own, recent) non-public tweet metrics                                                                                       | ◐ public metrics                                                                                            | Paid API tier required                                                    | later (optional)          |
+| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data                                                                                          | Commercial use terms                                                      | later                     |
+| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                                           | Bot added by server admin; Server Insights not in public API **[verify]** | later                     |
 
-All rows marked ◐ or ? are verified before the connector is built and recorded in that connector's README (`lib/integrations/<platform>/README.md`), including exact scopes and metric names.
+Until a platform has a connector, its accounts get data through CSV import (Scopie templates, plus column aliases for common exports such as LinkedIn's). All rows marked ◐ or ? are verified before the connector is built and documented here, including exact scopes and metric names.
 
-## 7. Adding a new platform connector (contributor guide summary)
+## 7. Adding a new platform connector
 
-1. Create `lib/integrations/<platform>/` with `connector.ts`, `schemas.ts` (Zod for API responses), `mapping.ts`, `README.md` (scopes, metrics, limits, setup).
-2. Implement `PlatformConnector`; declare honest `capabilities()`.
-3. Add rows to `platform_metric_map` via migration, with `comparability_class`.
-4. Register in `lib/platforms/registry.ts`.
-5. Add recorded-fixture tests: happy path, pagination, rate limit, expired token, missing scope, metric not returned.
-6. Add env vars to `.env.example` and setup steps to `docs/oauth/<platform>.md`.
+1. Create `lib/platforms/<provider>/` with an adapter implementing `PlatformAdapter` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
+2. Add mappings to `PLATFORM_METRIC_MAP` in `lib/metrics/registry.ts` **and** the same rows to `platform_metric_map` in a migration, each with a `comparability_class`. Add new metrics to both `METRIC_DEFINITIONS` and `metric_definitions`. Integration tests check code and database match.
+3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`) and, in the same migration, set `platforms.connector_status = 'available'` and `reporting_timezone`.
+4. Add connect/callback routes under `app/api/connections/<provider>/` and a `lib/connections/<provider>.ts` that stores tokens only through `connection_credentials`.
+5. Add fixture tests (`tests/fixtures/<provider>/`): happy path, pagination, rate limit, expired token, missing permission, metric not returned.
+6. Add env vars to `lib/server-env.ts` and `.env.example`, and setup steps to this document.

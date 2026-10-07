@@ -32,7 +32,7 @@ export default async function MembersSettingsPage({
       <div>
         <h2 className="text-base font-semibold">Members & roles</h2>
         <p className="text-muted-foreground text-[13px]">
-          Inviting new members by email arrives in Phase 2. Existing members&apos; roles can be
+          Inviting new members by email isn&apos;t built yet. Existing members&apos; roles can be
           changed by owners and admins; only owners can grant or remove the Owner role.
         </p>
       </div>

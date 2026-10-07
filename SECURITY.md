@@ -1,6 +1,6 @@
 # Security Policy
 
-Scopie handles marketing analytics and, from Phase 4, OAuth access to social media accounts. We take security reports seriously.
+Scopie handles marketing analytics and OAuth access to social media accounts. We take security reports seriously.
 
 ## Reporting a vulnerability
 
@@ -20,7 +20,7 @@ Scopie is pre-1.0. Only the latest `main` branch receives security fixes.
 - **Server-side secrets only.** Only variables prefixed `NEXT_PUBLIC_` reach the browser; nothing secret may use that prefix.
 - **Connection status can't be faked.** Users cannot mark an account as connected or as live data; only trusted server code can (database trigger).
 - **Audit log.** Changes to social accounts, memberships and organization settings are recorded in `activity_log`.
-- **Planned (Phase 4):** encrypted OAuth token storage (AES-256-GCM), tokens never sent to the browser, logs or AI prompts. See `docs/ARCHITECTURE.md` §8.
+- **In place (Phase 2):** OAuth tokens are encrypted at rest with AES-256-GCM (`SCOPIE_ENCRYPTION_KEY`), stored in a table no user role can read, never sent to the browser, and removed from every logged URL and error. Scopie requests read-only Meta permissions. See `docs/ARCHITECTURE.md` §8 and `docs/DATA_PIPELINE.md` §5.
 
 ## Never commit
 
