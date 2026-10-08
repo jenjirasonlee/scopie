@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 5 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 6 is next. Last updated: 2026-10-08
+> Status: Phases 1 to 6 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 7 is next. Last updated: 2026-10-08
 
 ## 1. Product focus
 
@@ -38,7 +38,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **3** Public profile intelligence ✅      | Access type and business role, provenance labels, public Instagram observation via Business Discovery, add profile by username, observation history, public posts and engagement, analytics layer, first dashboard, comparisons, "What changed?" panel. See [PHASE_3_PLAN.md](PHASE_3_PLAN.md) | A competitor added by username is observed daily on a real Meta app; dashboard and insights show only stored values |
 | **4** Benchmarking + YouTube ✅           | Benchmark groups, rankings with their basis, country vs country, period comparisons; YouTube public collector (API key, no Meta needed)                                                                                                                                                        | Rankings exclude non-comparable values; a YouTube channel is observed with no OAuth                                 |
 | **5** Content management + calendar ✅    | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
-| **6** Review + approval                   | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
+| **6** Review + approval ✅                | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
 | **7** Content strategy                    | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
 | **8** AI analyst + recommendations        | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
 | **9** Weekly intelligence reports         | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
@@ -111,6 +111,12 @@ Delivered: Settings → Content taxonomy (pillars with a colour, formats, campai
 
 Status moves are limited to Idea, Draft and Archived until the approval flow (Phase 6) exists.
 
-## 11. Next step
+## 11. Phase 6 outcome
 
-**Phase 6: Review + approval.** State machine, comments and mentions, request changes, approve/reject, history, queue, notifications.
+Delivered: submit for review (with a note), withdraw, approve, request changes and reject (a comment is required for the last two), mark as scheduled and as published. Every decision and every stage change is kept and shown as a history on the content page. Submitted versions and what the reviewer saw (title, platforms, country, taxonomy) are locked; starting a new version of approved content sends it back to draft, because the approval no longer applies. Managers can't approve their own submission; admins and owners can. Comments with replies, mentions of members, resolve and reopen. In-app notifications for review requests, decisions, mentions and comments on your content. The Approvals page lists what's waiting, sent back, approved, and published or rejected. DEMO review activity in the seed.
+
+Not built yet: email notifications (no email provider is set up), configurable approval rules (who may approve their own work, multi-step approval), and the automatic move to Analysed after publishing (needs post metrics linked to content; a published item can already be linked to its post in the database).
+
+## 12. Next step
+
+**Phase 7: Content strategy.** Strategies per market, objectives and KPIs, pillar targets, coverage.

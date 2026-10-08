@@ -34,15 +34,27 @@ export const CONTENT_STATUS_VARIANT: Record<
 /** Statuses shown in filters, in workflow order. */
 export const CONTENT_STATUSES = Object.keys(CONTENT_STATUS_LABELS) as ContentStatus[];
 
-/** What a status means, for help text. Statuses after Draft arrive with review (Phase 6). */
-export const CONTENT_STATUS_HELP: Partial<Record<ContentStatus, string>> = {
+/** What a status means, for help text. */
+export const CONTENT_STATUS_HELP: Record<ContentStatus, string> = {
   IDEA: 'A rough idea, not being written yet.',
   DRAFT: 'Being written and designed.',
+  IN_REVIEW: 'Submitted and waiting for a manager, admin or owner to review it. Locked meanwhile.',
+  CHANGES_REQUESTED: 'A reviewer asked for changes. Start a new version, make them and submit again.',
+  APPROVED: 'Approved. Starting a new version sends it back to draft.',
+  SCHEDULED: 'Approved and queued in the publishing tool.',
+  PUBLISHED: 'Live on the platform.',
+  ANALYSED: 'Published and its results reviewed.',
+  REJECTED: 'Not going ahead. It can be reworked as a new version or archived.',
   ARCHIVED: 'Put away. It keeps its history and can be restored as a draft.',
 };
 
-/** Content can be edited while it is an idea or a draft. */
+/** Stages whose current version can be edited (when it hasn't been submitted). */
 export function isEditableStatus(status: ContentStatus) {
+  return status === 'IDEA' || status === 'DRAFT' || status === 'CHANGES_REQUESTED';
+}
+
+/** Stages people can switch between in the content form. */
+export function isFormStatus(status: ContentStatus) {
   return status === 'IDEA' || status === 'DRAFT';
 }
 

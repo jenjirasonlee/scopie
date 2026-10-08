@@ -375,10 +375,13 @@ async function main() {
 
   const content = await seedContent(supabase, org.id, ownerId, teamIds[0]!);
 
+  const reviews = await seedReviews(url, password, org.id, ownerId);
+
   console.log(`Seeded DEMO DATA into "${org.name}" (/${org.slug}/dashboard)`);
   console.log(`  ${accounts.length} demo social accounts (${created} new)`);
   console.log(`  ${posts} DEMO posts and ${facts} new DEMO metric values`);
   console.log(`  ${content.items} DEMO content items (${content.created} new) and a DEMO taxonomy`);
+  console.log(`  ${reviews}`);
   console.log(
     `  Sign in as ${DEMO_USER_EMAIL} (owner), ${DEMO_TEAM.map((m) => `${m.email} (${m.role.toLowerCase()})`).join(', ')}`,
   );
@@ -446,6 +449,7 @@ const DEMO_CONTENT: {
   {
     title: 'Grower of the month (DEMO)',
     status: 'IDEA',
+    caption: "DEMO DATA. Meet this month's grower.",
     platforms: ['instagram', 'facebook'],
     country: 'ES',
     dayOffset: 9,
@@ -559,6 +563,16 @@ async function seedContent(
     if (itemId) {
       const { error } = await supabase.from('content_items').update(item).eq('id', itemId);
       if (error) throw error;
+      // Fill in copy added to the seed later, without overwriting edits.
+      if (entry.caption) {
+        const { error: captionError } = await supabase
+          .from('content_versions')
+          .update({ caption: entry.caption })
+          .eq('content_item_id', itemId)
+          .is('caption', null)
+          .is('submitted_at', null);
+        if (captionError) throw captionError;
+      }
     } else {
       const { data, error } = await supabase
         .from('content_items')
@@ -582,6 +596,108 @@ async function seedContent(
     }
   }
   return { items: DEMO_CONTENT.length, created };
+}
+
+/**
+ * DEMO review activity: submissions, decisions and comments made as the demo users through
+ * the same functions the app uses, so stage history and notifications are real rows.
+ * Only touches DEMO items that haven't been through review yet.
+ */
+async function seedReviews(
+  url: string,
+  password: string,
+  orgId: string,
+  ownerId: string,
+): Promise<string> {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!anonKey) return 'DEMO review activity skipped: NEXT_PUBLIC_SUPABASE_ANON_KEY is not set';
+  const signIn = async (email: string) => {
+    const client = createClient<Database>(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(`Could not sign in as ${email}: ${error.message}`);
+    return client;
+  };
+  const owner = await signIn(DEMO_USER_EMAIL);
+  const manager = await signIn(DEMO_TEAM[0]!.email);
+  const check = ({ error }: { error: { message: string } | null }) => {
+    if (error) throw new Error(error.message);
+  };
+
+  const { data: items, error } = await owner
+    .from('content_items')
+    .select('id, title, status, content_reviews(id)')
+    .eq('organization_id', orgId)
+    .like('title', '%(DEMO)');
+  if (error) throw error;
+  const fresh = new Map(
+    items
+      .filter(
+        (item) => item.content_reviews.length === 0 && ['IDEA', 'DRAFT'].includes(item.status),
+      )
+      .map((item) => [item.title, item.id]),
+  );
+  let flows = 0;
+  const flow = async (title: string, steps: (id: string) => Promise<void>) => {
+    const id = fresh.get(title);
+    if (!id) return;
+    await steps(id);
+    flows += 1;
+  };
+
+  // Approved and scheduled.
+  await flow('Autumn feeding tips reel (DEMO)', async (id) => {
+    check(
+      await owner.rpc('submit_content_for_review', {
+        item_id: id,
+        note: 'DEMO DATA. Ready for a look.',
+      }),
+    );
+    check(
+      await manager.rpc('review_content', {
+        item_id: id,
+        decision: 'APPROVED',
+        comment: 'DEMO DATA. Looks good.',
+      }),
+    );
+    check(await owner.rpc('set_content_scheduled', { item_id: id, scheduled: true }));
+  });
+  // Waiting for the owner's review, with a comment mentioning them.
+  await flow('New range unboxing (DEMO)', async (id) => {
+    check(
+      await manager.rpc('submit_content_for_review', {
+        item_id: id,
+        note: 'DEMO DATA. Can you check the product names?',
+      }),
+    );
+    check(
+      await manager.from('content_comments').insert({
+        organization_id: orgId,
+        content_item_id: id,
+        body: "DEMO DATA. The second shot still shows last year's label.",
+        mentions: [ownerId],
+      }),
+    );
+  });
+  // Sent back with changes requested.
+  await flow('Grower of the month (DEMO)', async (id) => {
+    check(await owner.rpc('submit_content_for_review', { item_id: id }));
+    check(
+      await manager.rpc('review_content', {
+        item_id: id,
+        decision: 'CHANGES_REQUESTED',
+        comment: 'DEMO DATA. Please add a quote from the grower.',
+      }),
+    );
+  });
+  // Approved and published, in the past.
+  await flow('pH basics explainer (DEMO)', async (id) => {
+    check(await owner.rpc('submit_content_for_review', { item_id: id }));
+    check(await manager.rpc('review_content', { item_id: id, decision: 'APPROVED' }));
+    check(await owner.rpc('mark_content_published', { item_id: id }));
+  });
+  return `DEMO review activity for ${flows} content items`;
 }
 
 main().catch((error: unknown) => {

@@ -36,9 +36,10 @@ What exists in code today:
 | Content taxonomy screens                                                                             | `lib/taxonomy/`, `app/[orgSlug]/settings/taxonomy/`                                                                 |
 | Content items, versions and private file uploads                                                     | `…_content_hub.sql`, `lib/content/`, `app/[orgSlug]/content/`, `app/api/content-assets/`                            |
 | Calendar (month, week, list) in the organization's time zone                                         | `lib/calendar/`, `components/calendar/`, `app/[orgSlug]/calendar/`                                                  |
+| Review and approval, comments, in-app notifications                                                  | `…_review_approval.sql`, `lib/approvals/`, `app/[orgSlug]/approvals/`, `app/[orgSlug]/notifications/`               |
 | Unit, database integration and Playwright tests; CI                                                  | `tests/`, `.github/workflows/ci.yml`                                                                                |
 
-Not implemented yet: approvals, strategy, AI, reports, connectors other than Meta, public data for platforms other than Instagram and YouTube, notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
+Not implemented yet: strategy, AI, reports, connectors other than Meta, public data for platforms other than Instagram and YouTube, email notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
 
 ## 1. Repository inspection (initial design, before Phase 1)
 
