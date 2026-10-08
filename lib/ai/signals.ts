@@ -1,4 +1,3 @@
-import { MEDIA_FORMAT_LABELS } from '@/lib/analytics/content';
 import { ENGAGEMENT_AGE_DAYS, postEngagement } from '@/lib/analytics/engagement';
 import { formatCount, formatSignedCount } from '@/lib/analytics/format';
 import { postingFrequency } from '@/lib/analytics/frequency';
@@ -51,9 +50,24 @@ export type SignalInput = {
   strategies: readonly { id: string; name: string; coverage: Coverage }[];
 };
 
+/** Formats as they read in a sentence: "Post more carousels", "a Reel or short video". */
+export const FORMAT_NAMES: Record<MediaFormat, { many: string; one: string }> = {
+  image: { many: 'image posts', one: 'image post' },
+  carousel: { many: 'carousels', one: 'carousel' },
+  short_video: { many: 'Reels and short videos', one: 'Reel or short video' },
+  long_video: { many: 'long videos', one: 'long video' },
+  video: { many: 'videos', one: 'video' },
+  text: { many: 'text posts', one: 'text post' },
+  link: { many: 'link posts', one: 'link post' },
+  story: { many: 'stories', one: 'story' },
+  live: { many: 'live videos', one: 'live video' },
+  other: { many: 'other posts', one: 'post' },
+};
+
 type Draft = Omit<Signal, 'id' | 'evidence'> & { evidence: Omit<Evidence, 'id'>[] };
 
 const iso = (date: Date) => date.toISOString();
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const ratioText = (ratio: number) => `${ratio.toFixed(1)}×`;
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -306,7 +320,7 @@ export function detectSignals(input: SignalInput): Signal[] {
   for (const segment of ownSegments) {
     const winner = segment.ratio >= SIGNAL_RULES.winnerRatio;
     if (!winner && segment.ratio > SIGNAL_RULES.loserRatio) continue;
-    const format = MEDIA_FORMAT_LABELS[segment.format];
+    const format = FORMAT_NAMES[segment.format].many;
     drafts.push({
       kind: winner ? 'format_winner' : 'format_loser',
       severity: severityFor(segment.stats),
@@ -322,7 +336,7 @@ export function detectSignals(input: SignalInput): Signal[] {
       path: '/analytics',
       evidence: [
         {
-          label: `${format} on ${platformName(segment.platformKey)}: engagement against each profile's usual`,
+          label: `${capitalize(format)} on ${platformName(segment.platformKey)}: engagement against each profile's usual`,
           value: segment.ratio,
           display: ratioText(segment.ratio),
           n: segment.posts,
@@ -352,7 +366,7 @@ export function detectSignals(input: SignalInput): Signal[] {
       ? ownOnPlatform.filter((p) => p.format === segment.format).length / ownOnPlatform.length
       : null;
     if (ownShare !== null && ownShare > segment.share - SIGNAL_RULES.formatShareGap) continue;
-    const format = MEDIA_FORMAT_LABELS[segment.format];
+    const format = FORMAT_NAMES[segment.format].many;
     const ownAccounts = own.filter((p) => p.platformKey === segment.platformKey).map((p) => p.id);
     drafts.push({
       kind: 'competitor_format',
@@ -475,6 +489,8 @@ export function detectSignals(input: SignalInput): Signal[] {
   ownPosts
     .filter((p) => p.ratio >= SIGNAL_RULES.standoutRatio && inPeriod(p.publishedAt, measuredNow))
     .sort((a, b) => b.ratio - a.ratio)
+    // One per profile: a second post from the same profile adds nothing new to try.
+    .filter((p, i, list) => list.findIndex((q) => q.accountId === p.accountId) === i)
     .slice(0, SIGNAL_RULES.maxStandouts)
     .forEach((post) => {
       const profile = own.find((p) => p.id === post.accountId)!;
@@ -489,7 +505,7 @@ export function detectSignals(input: SignalInput): Signal[] {
         stats: { n: 1, accounts: 1, consistentAccounts: 1, effect: post.ratio },
         facts: {
           profile: name(profile.id),
-          format: MEDIA_FORMAT_LABELS[post.format],
+          format: FORMAT_NAMES[post.format].one,
           platform: platformName(profile.platformKey),
           permalink: post.permalink ?? '',
           otherAccountIds: others.join(','),
@@ -497,7 +513,7 @@ export function detectSignals(input: SignalInput): Signal[] {
         path: `/accounts/${profile.id}`,
         evidence: [
           {
-            label: `Likes + comments at ${ENGAGEMENT_AGE_DAYS} days on one ${MEDIA_FORMAT_LABELS[post.format]} by ${name(profile.id)}`,
+            label: `Likes + comments at ${ENGAGEMENT_AGE_DAYS} days on one ${FORMAT_NAMES[post.format].one} by ${name(profile.id)}`,
             value: post.engagement,
             display: formatCount(post.engagement),
             periodStart: post.publishedAt,

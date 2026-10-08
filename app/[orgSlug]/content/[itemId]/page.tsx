@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getSourceRecommendation } from '@/lib/ai/queries';
+import { recommendationTabHref } from '@/lib/ai/shared';
 import { getReviewActivity } from '@/lib/approvals/queries';
 import { getCurrentUser } from '@/lib/auth/session';
 import { can } from '@/lib/auth/permissions';
@@ -66,6 +68,9 @@ export default async function ContentItemPage({
   ]);
   if (!detail) notFound();
   const { item, version, isCurrentVersion, assets, versions } = detail;
+  const source = item.source_recommendation_id
+    ? await getSourceRecommendation(org.id, item.source_recommendation_id)
+    : null;
   const current = versions.find((v) => v.id === item.current_version_id) ?? versions[0];
   const currentSubmitted = Boolean(current?.submitted_at);
 
@@ -142,6 +147,17 @@ export default async function ContentItemPage({
         }
       />
 
+      {source ? (
+        <p className="text-muted-foreground text-[13px]">
+          Created from the recommendation{' '}
+          <Link
+            href={`${recommendationTabHref(orgSlug, source.status)}#rec-${source.id}`}
+            className="text-primary font-medium hover:underline"
+          >
+            “{source.title}”
+          </Link>
+        </p>
+      ) : null}
       {search.created ? (
         <Alert variant="success">
           <CheckCircle2 aria-hidden />

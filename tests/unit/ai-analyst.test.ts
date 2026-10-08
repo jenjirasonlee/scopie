@@ -119,7 +119,7 @@ describe('signals', () => {
   it('finds a format that does better than usual across profiles', () => {
     const [winner] = byKind('format_winner');
     expect(winner).toBeDefined();
-    expect(winner!.facts.format).toBe('Reel / short video');
+    expect(winner!.facts.format).toBe('Reels and short videos');
     expect(winner!.stats).toEqual({ n: 30, accounts: 3, consistentAccounts: 3, effect: 2 });
     expect(winner!.evidence[0]).toMatchObject({ display: '2.0×', n: 30 });
     expect(byKind('format_loser')).toEqual([]);
@@ -219,7 +219,7 @@ describe('rules writer', () => {
 
   it('turns a format winner into an experiment with a computed confidence', () => {
     const rec = recommendations.find((r) => r.title.startsWith('Post more'))!;
-    expect(rec.title).toBe('Post more Reel / short video on Instagram');
+    expect(rec.title).toBe('Post more Reels and short videos on Instagram');
     expect(rec.confidence).toBe('high');
     expect(rec.experiment).toMatchObject({ durationDays: 28, accountIds: ['a', 'b', 'c'] });
   });

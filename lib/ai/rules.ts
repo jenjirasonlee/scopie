@@ -10,6 +10,7 @@ const ENGAGEMENT_METRIC = "Median likes + comments at 7 days, against each profi
 
 const shown = (signal: Signal, k: number) => signal.evidence[k - 1]?.display ?? '';
 const fact = (signal: Signal, key: string) => String(signal.facts[key] ?? '');
+const cap = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const ids = (value: string) => value.split(',').filter(Boolean);
 
 export function insightFromSignal(signal: Signal): InsightDraft {
@@ -37,20 +38,20 @@ export function insightFromSignal(signal: Signal): InsightDraft {
     case 'format_winner':
       return {
         ...base,
-        title: `${f('format')} did better than usual on ${f('platform')}`,
-        body: `On your ${f('platform')} profiles, ${f('format')} posts got ${e(1)} the engagement each profile usually gets (${signal.evidence[0]!.n} posts). They were ${e(2)} of your measured posts there.`,
+        title: `${cap(f('format'))} did better than usual on ${f('platform')}`,
+        body: `On your ${f('platform')} profiles, ${f('format')} got ${e(1)} the engagement each profile usually gets (${signal.evidence[0]!.n} posts). They were ${e(2)} of your measured posts there.`,
       };
     case 'format_loser':
       return {
         ...base,
-        title: `${f('format')} did worse than usual on ${f('platform')}`,
-        body: `On your ${f('platform')} profiles, ${f('format')} posts got ${e(1)} the engagement each profile usually gets (${signal.evidence[0]!.n} posts). They were ${e(2)} of your measured posts there.`,
+        title: `${cap(f('format'))} did worse than usual on ${f('platform')}`,
+        body: `On your ${f('platform')} profiles, ${f('format')} got ${e(1)} the engagement each profile usually gets (${signal.evidence[0]!.n} posts). They were ${e(2)} of your measured posts there.`,
       };
     case 'competitor_format':
       return {
         ...base,
         title: `Competitors' ${f('format')} did well on ${f('platform')}`,
-        body: `Competitors' ${f('format')} posts got ${e(1)} their usual engagement (${signal.evidence[0]!.n} posts), and ${e(2)} of their posts were ${f('format')}.${signal.evidence[2] ? ` For your profiles it was ${e(3)}.` : ' Scopie has no measured posts of yours on this platform to compare.'}`,
+        body: `Competitors' ${f('format')} got ${e(1)} their usual engagement (${signal.evidence[0]!.n} posts), and ${e(2)} of their posts were ${f('format')}.${signal.evidence[2] ? ` For your profiles it was ${e(3)}.` : ' Scopie has no measured posts of yours on this platform to compare.'}`,
       };
     case 'topic_gap':
       return {
@@ -61,7 +62,7 @@ export function insightFromSignal(signal: Signal): InsightDraft {
     case 'standout_post':
       return {
         ...base,
-        title: `A ${f('format')} by ${f('profile')} did ${e(2)} its usual`,
+        title: `One ${f('format')} by ${f('profile')} did ${e(2)} its usual`,
         body: `It got ${e(1)} likes + comments at 7 days, ${e(2)} what the profile usually gets. One post is a single data point.`,
       };
     case 'pillar_gap':
@@ -99,7 +100,7 @@ export function recommendationFromSignal(signal: Signal): RecommendationDraft | 
         expectedImpact: `If the pattern holds, more posts near ${e(1)} the usual likes + comments at 7 days. ${association}`,
         accountIds: signal.accountIds,
         experiment: experiment({
-          hypothesis: `${f('format')} posts are associated with higher engagement than usual on these profiles.`,
+          hypothesis: `${cap(f('format'))} are associated with higher engagement than usual on these profiles.`,
           variant: `At least half of the posts are ${f('format')}.`,
           control: 'The usual mix of formats.',
           accountIds: signal.accountIds,
@@ -113,9 +114,9 @@ export function recommendationFromSignal(signal: Signal): RecommendationDraft | 
         expectedImpact: `Shows whether ${f('format')} can get back to the usual engagement, or should take a smaller share. ${association}`,
         accountIds: signal.accountIds,
         experiment: experiment({
-          hypothesis: `A different hook, length or time is associated with better ${f('format')} engagement.`,
-          variant: `Half of the ${f('format')} posts change one thing.`,
-          control: `The other ${f('format')} posts, made as usual.`,
+          hypothesis: `A different hook, length or time is associated with better engagement on ${f('format')}.`,
+          variant: `Half of the ${f('format')} change one thing.`,
+          control: `The other ${f('format')}, made as usual.`,
           accountIds: signal.accountIds,
         }),
       };
@@ -125,12 +126,12 @@ export function recommendationFromSignal(signal: Signal): RecommendationDraft | 
       return {
         ...base,
         title: `Test ${f('format')} on ${f('platform')}`,
-        recommendation: `Competitors post more ${f('format')} and it does well for them. Try a few on your ${f('platform')} profiles for four weeks and compare them with your usual.`,
-        expectedImpact: `Shows whether ${f('format')} works for your audience too. Competitors' results don't carry over by themselves.`,
+        recommendation: `Competitors post more ${f('format')} and they do well for them. Try a few on your ${f('platform')} profiles for four weeks and compare them with your usual.`,
+        expectedImpact: `Shows whether ${f('format')} work for your audience too. Competitors' results don't carry over by themselves.`,
         accountIds: own,
         experiment: experiment({
-          hypothesis: `${f('format')} is associated with higher engagement on your profiles, as it is for competitors.`,
-          variant: `One or two ${f('format')} posts a week.`,
+          hypothesis: `${cap(f('format'))} are associated with higher engagement on your profiles, as for competitors.`,
+          variant: `One or two ${f('format')} a week.`,
           control: 'Your usual posts in the same weeks.',
           accountIds: own,
         }),

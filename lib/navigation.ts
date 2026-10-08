@@ -146,7 +146,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'AI Insights',
     segment: 'insights',
     icon: Sparkles,
-    status: 'planned',
+    status: 'available',
     phase: 8,
     summary: 'Evidence-backed insights and recommendations from your own data.',
     planned: [
