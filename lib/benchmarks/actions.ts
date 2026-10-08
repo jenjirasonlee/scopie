@@ -9,7 +9,7 @@ import { getOrgContext } from '@/lib/orgs/queries';
 
 const NO_PERMISSION: FormState = {
   status: 'error',
-  message: 'Only owners and admins can change benchmark groups.',
+  message: 'Only owners, admins and managers can change benchmark groups.',
 };
 
 const nameSchema = z.object({
@@ -48,7 +48,7 @@ export async function createBenchmarkGroup(
   formData: FormData,
 ): Promise<FormState> {
   const { org, role } = await getOrgContext(orgSlug);
-  if (!can(role, 'accounts.manage')) return NO_PERMISSION;
+  if (!can(role, 'strategy.manage')) return NO_PERMISSION;
   const raw = formDataToObject(formData);
   const parsed = nameSchema.safeParse(raw);
   if (!parsed.success) return fieldErrorsFrom(parsed.error, raw);
@@ -70,7 +70,7 @@ export async function renameBenchmarkGroup(
   formData: FormData,
 ): Promise<FormState> {
   const { org, role } = await getOrgContext(orgSlug);
-  if (!can(role, 'accounts.manage')) return NO_PERMISSION;
+  if (!can(role, 'strategy.manage')) return NO_PERMISSION;
   const raw = formDataToObject(formData);
   const parsed = nameSchema.safeParse(raw);
   if (!parsed.success) return fieldErrorsFrom(parsed.error, raw);
@@ -95,7 +95,7 @@ export async function renameBenchmarkGroup(
 
 export async function deleteBenchmarkGroup(orgSlug: string, formData: FormData): Promise<void> {
   const { org, role } = await getOrgContext(orgSlug);
-  if (!can(role, 'accounts.manage')) throw new Error(NO_PERMISSION.message);
+  if (!can(role, 'strategy.manage')) throw new Error(NO_PERMISSION.message);
   const { groupId } = groupIdSchema.parse({ groupId: formData.get('groupId') });
 
   const supabase = await createClient();
@@ -116,7 +116,7 @@ export async function addBenchmarkGroupMembers(
   formData: FormData,
 ): Promise<FormState> {
   const { org, role } = await getOrgContext(orgSlug);
-  if (!can(role, 'accounts.manage')) return NO_PERMISSION;
+  if (!can(role, 'strategy.manage')) return NO_PERMISSION;
   const parsed = membersSchema.safeParse({
     groupId: formData.get('groupId'),
     accountIds: formData.getAll('accountId'),
@@ -155,7 +155,7 @@ export async function removeBenchmarkGroupMember(
   formData: FormData,
 ): Promise<void> {
   const { org, role } = await getOrgContext(orgSlug);
-  if (!can(role, 'accounts.manage')) throw new Error(NO_PERMISSION.message);
+  if (!can(role, 'strategy.manage')) throw new Error(NO_PERMISSION.message);
   const { groupId, accountId } = memberSchema.parse({
     groupId: formData.get('groupId'),
     accountId: formData.get('accountId'),

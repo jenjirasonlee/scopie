@@ -31,7 +31,7 @@ export default async function BenchmarkGroupsPage({
 }) {
   const { orgSlug } = await params;
   const { org, role } = await getOrgContext(orgSlug);
-  const canManage = can(role, 'accounts.manage');
+  const canManage = can(role, 'strategy.manage');
   const [groups, profiles] = await Promise.all([
     listBenchmarkGroups(org.id),
     listGroupableProfiles(org.id),
@@ -55,8 +55,8 @@ export default async function BenchmarkGroupsPage({
 
       {!canManage ? (
         <p className="text-muted-foreground text-[13px]">
-          You have read-only access to benchmark groups. Owners and admins can create and change
-          them.
+          You have read-only access to benchmark groups. Owners, admins and managers can create and
+          change them.
         </p>
       ) : null}
 
@@ -101,7 +101,7 @@ export default async function BenchmarkGroupsPage({
           No benchmark groups yet.
           {canManage
             ? ' Create one above.'
-            : ' Ask an owner or admin of this organization to create one.'}
+            : ' Ask an owner, admin or manager of this organization to create one.'}
         </p>
       ) : null}
 
