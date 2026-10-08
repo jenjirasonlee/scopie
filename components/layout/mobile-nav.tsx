@@ -2,12 +2,12 @@
 
 import { Menu, X } from 'lucide-react';
 import { Dialog } from 'radix-ui';
-import { useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { Logo } from '@/components/shared/logo';
 import { Button } from '@/components/ui/button';
 import { SidebarNav } from './sidebar-nav';
 
-export function MobileNav() {
+export function MobileNav({ counts }: { counts?: ComponentProps<typeof SidebarNav>['counts'] }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -30,7 +30,7 @@ export function MobileNav() {
             </Dialog.Close>
           </div>
           <Dialog.Description className="sr-only">Main navigation</Dialog.Description>
-          <SidebarNav onNavigate={() => setOpen(false)} />
+          <SidebarNav counts={counts} onNavigate={() => setOpen(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

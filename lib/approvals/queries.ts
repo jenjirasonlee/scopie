@@ -154,6 +154,7 @@ export type QueueItem = {
   platformKeys: string[];
   countryCode: string | null;
   plannedPublishAt: string | null;
+  publishedAt: string | null;
   updatedAt: string;
   ownerName: string | null;
   versionNumber: number | null;
@@ -176,7 +177,7 @@ export async function listReviewQueue(orgId: string, tab: QueueTab): Promise<Que
   const { data, error } = await supabase
     .from('content_items')
     .select(
-      `id, title, status, platform_keys, country_code, planned_publish_at, updated_at,
+      `id, title, status, platform_keys, country_code, planned_publish_at, published_at, updated_at,
        owner:profiles!content_items_owner_user_id_fkey(full_name, email),
        current_version:content_versions!content_items_current_version_fk(version_number, submitted_at, submitted_by, submitter:profiles!content_versions_submitted_by_fkey(full_name, email)),
        content_comments(resolved_at)`,
@@ -193,6 +194,7 @@ export async function listReviewQueue(orgId: string, tab: QueueTab): Promise<Que
     platformKeys: row.platform_keys,
     countryCode: row.country_code,
     plannedPublishAt: row.planned_publish_at,
+    publishedAt: row.published_at,
     updatedAt: row.updated_at,
     ownerName: nameOf(row.owner),
     versionNumber: row.current_version?.version_number ?? null,

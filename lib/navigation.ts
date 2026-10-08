@@ -92,9 +92,9 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Approvals',
     segment: 'approvals',
     icon: CheckSquare,
-    status: 'planned',
+    status: 'available',
     phase: 6,
-    summary: 'Review queue, comments and approval history.',
+    summary: 'Content waiting for review, sent back for changes, or approved.',
     planned: [
       'Submit content for review',
       'Comment, mention, request changes, approve or reject',
