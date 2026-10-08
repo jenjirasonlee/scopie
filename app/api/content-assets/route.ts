@@ -70,7 +70,20 @@ export async function POST(request: NextRequest) {
     return back({ uploadError: 'Only editors, managers, admins and owners can add files.' });
   }
   if (!isEditableStatus(item.status)) {
-    return back({ uploadError: 'Files can only be added to ideas and drafts.' });
+    return back({
+      uploadError: 'Files can only be added to ideas, drafts and content with requested changes.',
+    });
+  }
+  const { data: version } = await supabase
+    .from('content_versions')
+    .select('submitted_at')
+    .eq('id', item.current_version_id)
+    .maybeSingle();
+  if (version?.submitted_at) {
+    return back({
+      uploadError:
+        'This version was submitted for review and is locked. Start a new version to add files.',
+    });
   }
   const store = assetStore();
   if (!store) {

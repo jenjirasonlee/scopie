@@ -8,7 +8,8 @@ import { zonedDateTimeToUtc } from '@/lib/calendar/time';
 import { createClient } from '@/lib/db/server';
 import { echoValues, fieldErrorsFrom, formDataToObject, type FormState } from '@/lib/forms';
 import { getOrgContext } from '@/lib/orgs/queries';
-import { contentItemSchema, type ContentItemInput } from '@/schemas/content';
+import { contentItemSchema, contentPlanSchema, type ContentItemInput } from '@/schemas/content';
+import { isFormStatus } from './shared';
 import { assetStore } from './store';
 
 const NO_PERMISSION: FormState = {
@@ -29,6 +30,16 @@ function parseForm(formData: FormData) {
   return { raw, parsed };
 }
 
+function plannedAt(input: { plannedDate: string; plannedTime: string }, timeZone: string) {
+  return input.plannedDate
+    ? zonedDateTimeToUtc(
+        input.plannedDate,
+        input.plannedTime || DEFAULT_TIME,
+        timeZone,
+      ).toISOString()
+    : null;
+}
+
 function itemFields(input: ContentItemInput, timeZone: string) {
   return {
     title: input.title,
@@ -41,13 +52,7 @@ function itemFields(input: ContentItemInput, timeZone: string) {
     campaign_id: input.campaignId,
     audience_id: input.audienceId,
     cta_type_id: input.ctaTypeId,
-    planned_publish_at: input.plannedDate
-      ? zonedDateTimeToUtc(
-          input.plannedDate,
-          input.plannedTime || DEFAULT_TIME,
-          timeZone,
-        ).toISOString()
-      : null,
+    planned_publish_at: plannedAt(input, timeZone),
   };
 }
 
@@ -80,6 +85,7 @@ function saveError(
 function revalidate(orgSlug: string, itemId?: string) {
   revalidatePath(`/${orgSlug}/content`);
   revalidatePath(`/${orgSlug}/calendar`);
+  revalidatePath(`/${orgSlug}/approvals`);
   if (itemId) revalidatePath(`/${orgSlug}/content/${itemId}`);
 }
 
@@ -127,9 +133,18 @@ export async function updateContentItem(
   if (!parsed.success) return fieldErrorsFrom(parsed.error, raw);
 
   const supabase = await createClient();
+  const { data: current } = await supabase
+    .from('content_items')
+    .select('status')
+    .eq('organization_id', org.id)
+    .eq('id', itemId)
+    .maybeSingle();
+  if (!current) return { status: 'error', message: 'Content not found.' };
+  // The stage only changes here between idea and draft; review moves have their own buttons.
+  const { status, ...fields } = itemFields(parsed.data, org.default_timezone);
   const { data: item, error } = await supabase
     .from('content_items')
-    .update(itemFields(parsed.data, org.default_timezone))
+    .update(isFormStatus(current.status) ? { ...fields, status } : fields)
     .eq('organization_id', org.id)
     .eq('id', itemId)
     .select('current_version_id')
@@ -142,6 +157,42 @@ export async function updateContentItem(
     .update(versionFields(parsed.data))
     .eq('id', item.current_version_id!);
   if (versionError) return saveError(versionError, raw);
+
+  revalidate(orgSlug, itemId);
+  return { status: 'success', message: 'Saved.' };
+}
+
+/**
+ * Changes only the publish date and owner. Used once the version is locked for review,
+ * when the rest of the content can't change.
+ */
+export async function updateContentPlan(
+  orgSlug: string,
+  itemId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { org, role } = await getOrgContext(orgSlug);
+  if (!can(role, 'content.edit')) return NO_PERMISSION;
+  if (!z.uuid().safeParse(itemId).success)
+    return { status: 'error', message: 'Content not found.' };
+  const raw = formDataToObject(formData);
+  const parsed = contentPlanSchema.safeParse(raw);
+  if (!parsed.success) return fieldErrorsFrom(parsed.error, raw);
+
+  const supabase = await createClient();
+  const { data: item, error } = await supabase
+    .from('content_items')
+    .update({
+      owner_user_id: parsed.data.ownerUserId,
+      planned_publish_at: plannedAt(parsed.data, org.default_timezone),
+    })
+    .eq('organization_id', org.id)
+    .eq('id', itemId)
+    .select('id')
+    .maybeSingle();
+  if (error) return saveError(error, raw);
+  if (!item) return { status: 'error', message: 'Content not found.' };
 
   revalidate(orgSlug, itemId);
   return { status: 'success', message: 'Saved.' };

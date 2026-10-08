@@ -4,22 +4,34 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { ContentAssets } from '@/components/content/content-assets';
+import { ContentComments } from '@/components/content/content-comments';
 import { ContentForm } from '@/components/content/content-form';
+import { ReviewHistory } from '@/components/content/review-history';
+import { ReviewPanel } from '@/components/content/review-panel';
 import { PageHeader } from '@/components/shared/page-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getReviewActivity } from '@/lib/approvals/queries';
+import { getCurrentUser } from '@/lib/auth/session';
 import { can } from '@/lib/auth/permissions';
 import { utcToZonedParts } from '@/lib/calendar/time';
-import { setContentArchived, startNewVersion, updateContentItem } from '@/lib/content/actions';
+import {
+  setContentArchived,
+  startNewVersion,
+  updateContentItem,
+  updateContentPlan,
+} from '@/lib/content/actions';
 import { getContentOptionLists } from '@/lib/content/form-options';
 import { getContentDetail } from '@/lib/content/queries';
+import { canArchive, canEditPlan, formatDateTime, reviewOptions } from '@/lib/content/review';
 import {
   CONTENT_STATUS_HELP,
   CONTENT_STATUS_LABELS,
   CONTENT_STATUS_VARIANT,
   isEditableStatus,
+  isFormStatus,
 } from '@/lib/content/shared';
 import { assetStore } from '@/lib/content/store';
 import { getOrgContext } from '@/lib/orgs/queries';
@@ -42,32 +54,39 @@ export default async function ContentItemPage({
   if (!z.uuid().safeParse(itemId).success) notFound();
   const requested = Number(single(search.version));
   const { org, role } = await getOrgContext(orgSlug);
-  const [detail, options] = await Promise.all([
+  const [detail, options, activity, user] = await Promise.all([
     getContentDetail(
       org.id,
       itemId,
       Number.isInteger(requested) && requested > 0 ? requested : undefined,
     ),
     getContentOptionLists(org.id),
+    getReviewActivity(org.id, itemId),
+    getCurrentUser(),
   ]);
   if (!detail) notFound();
   const { item, version, isCurrentVersion, assets, versions } = detail;
+  const current = versions.find((v) => v.id === item.current_version_id) ?? versions[0];
+  const currentSubmitted = Boolean(current?.submitted_at);
 
   const canEdit = can(role, 'content.edit');
   const editable =
     canEdit && isCurrentVersion && isEditableStatus(item.status) && !version.submitted_at;
+  // Once a version is locked for review, only the publish date and owner can change.
+  const planEditable = canEdit && isCurrentVersion && !editable && canEditPlan(item.status);
+  const review = reviewOptions({
+    status: item.status,
+    role,
+    versionSubmitted: currentSubmitted,
+    submittedByMe: Boolean(user && current?.submitted_by === user.id),
+  });
+  const memberName = (id: string | null | undefined) =>
+    options.members.find((m) => m.value === id)?.label ?? null;
   const planned = item.planned_publish_at
     ? utcToZonedParts(new Date(item.planned_publish_at), org.default_timezone)
     : null;
-  const dateLabel = (iso: string) =>
-    new Date(iso).toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: org.default_timezone,
-    });
+  const dateLabel = (iso: string) => formatDateTime(iso, org.default_timezone);
+  const { latestDecision } = activity;
   const uploaded = Number(single(search.uploaded) ?? 0);
   const uploadError = single(search.uploadError)?.slice(0, 300);
 
@@ -99,7 +118,7 @@ export default async function ContentItemPage({
                 Calendar
               </Link>
             </Button>
-            {canEdit && item.status !== 'ARCHIVED' && isEditableStatus(item.status) ? (
+            {canArchive(item.status, role) ? (
               <form action={setContentArchived.bind(null, orgSlug)}>
                 <input type="hidden" name="itemId" value={item.id} />
                 <input type="hidden" name="status" value="ARCHIVED" />
@@ -153,14 +172,52 @@ export default async function ContentItemPage({
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0 space-y-6">
+          {item.status !== 'ARCHIVED' ? (
+            <ReviewPanel
+              key={current?.id}
+              orgSlug={orgSlug}
+              itemId={item.id}
+              status={item.status}
+              options={review}
+              versionNumber={current?.version_number ?? 1}
+              submittedLabel={
+                item.status === 'IN_REVIEW' && current?.submitted_at
+                  ? [memberName(current.submitted_by), dateLabel(current.submitted_at)]
+                      .filter(Boolean)
+                      .join(', ')
+                  : null
+              }
+              hasPlannedDate={Boolean(item.planned_publish_at)}
+              latestDecision={
+                latestDecision
+                  ? {
+                      decision: latestDecision.decision,
+                      comment: latestDecision.comment,
+                      reviewerName: latestDecision.reviewerName,
+                      versionNumber: latestDecision.versionNumber,
+                      when: dateLabel(latestDecision.at),
+                    }
+                  : null
+              }
+            />
+          ) : null}
+
           <Card>
             <CardContent className="pt-6">
               <ContentForm
-                key={version.id}
-                action={updateContentItem.bind(null, orgSlug, item.id)}
+                key={`${version.id}-${item.status}`}
+                action={
+                  editable
+                    ? updateContentItem.bind(null, orgSlug, item.id)
+                    : updateContentPlan.bind(null, orgSlug, item.id)
+                }
                 readOnly={!editable}
+                planEditable={planEditable}
+                stageLabel={
+                  isFormStatus(item.status) ? undefined : CONTENT_STATUS_LABELS[item.status]
+                }
                 defaults={{
                   title: item.title,
                   status: isEditableStatus(item.status) ? item.status : 'DRAFT',
@@ -197,6 +254,16 @@ export default async function ContentItemPage({
             versionLabel={isCurrentVersion ? 'this version' : `version ${version.version_number}`}
             uploaded={Number.isFinite(uploaded) ? uploaded : 0}
             uploadError={uploadError}
+          />
+
+          <ContentComments
+            orgSlug={orgSlug}
+            itemId={item.id}
+            comments={activity.comments}
+            canComment={canEdit}
+            currentUserId={user?.id ?? null}
+            members={options.members}
+            timeZone={org.default_timezone}
           />
         </div>
 
@@ -242,7 +309,7 @@ export default async function ContentItemPage({
                   );
                 })}
               </ol>
-              {canEdit && isEditableStatus(item.status) ? (
+              {canEdit && isEditableStatus(item.status) && !currentSubmitted ? (
                 <form action={startNewVersion.bind(null, orgSlug)}>
                   <input type="hidden" name="itemId" value={item.id} />
                   <Button type="submit" variant="outline" size="sm" className="w-full">
@@ -253,9 +320,7 @@ export default async function ContentItemPage({
               ) : null}
             </CardContent>
           </Card>
-          <p className="text-muted-foreground text-xs">
-            Review and approval come next: soon you’ll submit a version for review here.
-          </p>
+          <ReviewHistory history={activity.history} timeZone={org.default_timezone} />
         </aside>
       </div>
     </div>

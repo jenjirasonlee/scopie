@@ -53,6 +53,8 @@ export function ContentForm({
   submitLabel,
   cancelHref,
   readOnly = false,
+  planEditable = false,
+  stageLabel,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   defaults?: ContentFormDefaults;
@@ -63,7 +65,12 @@ export function ContentForm({
   submitLabel: string;
   cancelHref?: string;
   readOnly?: boolean;
+  /** With readOnly: publish date, time and owner can still be changed and saved. */
+  planEditable?: boolean;
+  /** Shown instead of the idea/draft choice once content is past those stages. */
+  stageLabel?: string;
 }) {
+  const planLocked = readOnly && !planEditable;
   const [state, formAction] = useActionState(action, initialFormState);
   const errors = state.fieldErrors ?? {};
   // After a failed submit, show what the person typed rather than the stored values.
@@ -100,8 +107,14 @@ export function ContentForm({
   return (
     <form action={formAction} className="space-y-6" noValidate>
       <FormMessage state={state} />
-      <fieldset disabled={readOnly} className="space-y-6">
-        <fieldset className="grid gap-4 sm:grid-cols-[1fr_180px]">
+      {readOnly && planEditable ? (
+        <p className="text-muted-foreground text-[13px]">
+          This version was submitted for review, so it can’t change. You can still change the
+          publish date and owner.
+        </p>
+      ) : null}
+      <div className="space-y-6">
+        <fieldset disabled={readOnly} className="grid gap-4 sm:grid-cols-[1fr_180px]">
           <legend className="sr-only">Content</legend>
           <FormField id="title" label="Title" errors={errors.title}>
             <Input
@@ -112,15 +125,24 @@ export function ContentForm({
               required
             />
           </FormField>
-          <FormField id="status" label="Stage" errors={errors.status}>
-            <NativeSelect name="status" defaultValue={value('status') || 'IDEA'}>
-              <option value="IDEA">Idea</option>
-              <option value="DRAFT">Draft</option>
-            </NativeSelect>
-          </FormField>
+          {stageLabel ? (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Stage</p>
+              <p className="flex h-9 items-center text-sm">{stageLabel}</p>
+              {/* The form always sends a stage; the server keeps the real one. */}
+              <input type="hidden" name="status" value="DRAFT" />
+            </div>
+          ) : (
+            <FormField id="status" label="Stage" errors={errors.status}>
+              <NativeSelect name="status" defaultValue={value('status') || 'IDEA'}>
+                <option value="IDEA">Idea</option>
+                <option value="DRAFT">Draft</option>
+              </NativeSelect>
+            </FormField>
+          )}
         </fieldset>
 
-        <fieldset className="space-y-2">
+        <fieldset disabled={readOnly} className="space-y-2">
           <legend className="mb-1 text-sm font-semibold">Platforms</legend>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             {options.platforms.map((platform) => (
@@ -160,7 +182,12 @@ export function ContentForm({
             hint={`In ${timeZone}.`}
             errors={errors.plannedDate}
           >
-            <Input type="date" name="plannedDate" defaultValue={value('plannedDate')} />
+            <Input
+              type="date"
+              name="plannedDate"
+              defaultValue={value('plannedDate')}
+              disabled={planLocked}
+            />
           </FormField>
           <FormField
             id="plannedTime"
@@ -169,10 +196,19 @@ export function ContentForm({
             hint="09:00 if left empty."
             errors={errors.plannedTime}
           >
-            <Input type="time" name="plannedTime" defaultValue={value('plannedTime')} />
+            <Input
+              type="time"
+              name="plannedTime"
+              defaultValue={value('plannedTime')}
+              disabled={planLocked}
+            />
           </FormField>
           <FormField id="ownerUserId" label="Owner" optional errors={errors.ownerUserId}>
-            <NativeSelect name="ownerUserId" defaultValue={value('ownerUserId')}>
+            <NativeSelect
+              name="ownerUserId"
+              defaultValue={value('ownerUserId')}
+              disabled={planLocked}
+            >
               <option value="">No owner</option>
               {options.members.map((member) => (
                 <option key={member.value} value={member.value}>
@@ -182,7 +218,11 @@ export function ContentForm({
             </NativeSelect>
           </FormField>
           <FormField id="countryCode" label="Country" optional errors={errors.countryCode}>
-            <NativeSelect name="countryCode" defaultValue={value('countryCode')}>
+            <NativeSelect
+              name="countryCode"
+              defaultValue={value('countryCode')}
+              disabled={readOnly}
+            >
               <option value="">All countries</option>
               {options.countries.map((country) => (
                 <option key={country.value} value={country.value}>
@@ -198,7 +238,7 @@ export function ContentForm({
           {taxonomySelect('ctaTypeId', 'CTA type', options.ctaTypes)}
         </fieldset>
 
-        <fieldset className="grid gap-4">
+        <fieldset disabled={readOnly} className="grid gap-4">
           <legend className="mb-3 text-sm font-semibold">Copy</legend>
           <FormField id="caption" label="Caption" optional errors={errors.caption}>
             <Textarea name="caption" rows={5} defaultValue={value('caption')} maxLength={5000} />
@@ -244,11 +284,11 @@ export function ContentForm({
             <Textarea name="notes" rows={2} defaultValue={value('notes')} maxLength={5000} />
           </FormField>
         </fieldset>
-      </fieldset>
+      </div>
 
-      {readOnly ? null : (
+      {planLocked ? null : (
         <div className="flex flex-wrap items-center gap-2">
-          <SubmitButton>{submitLabel}</SubmitButton>
+          <SubmitButton>{readOnly ? 'Save date and owner' : submitLabel}</SubmitButton>
           {cancelHref ? (
             <Button asChild variant="ghost">
               <Link href={cancelHref}>Cancel</Link>

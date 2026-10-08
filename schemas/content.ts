@@ -18,6 +18,23 @@ export function parseHashtags(text: string): string[] {
   return [...new Set(tags.map((tag) => tag.toLowerCase()))].slice(0, 60);
 }
 
+const plannedDate = z
+  .string()
+  .optional()
+  .transform((value) => value ?? '')
+  .refine((value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), 'Use a date');
+
+const plannedTime = z
+  .string()
+  .optional()
+  .transform((value) => value ?? '')
+  .refine((value) => value === '' || /^\d{2}:\d{2}$/.test(value), 'Use a time such as 09:30');
+
+const timeNeedsDate = {
+  path: ['plannedDate'],
+  message: 'Choose a date for this time',
+};
+
 /**
  * The content item form. Planned date and time are entered in the organization's
  * time zone; the action converts them to a timestamp.
@@ -41,16 +58,8 @@ export const contentItemSchema = z
     campaignId: optionalId,
     audienceId: optionalId,
     ctaTypeId: optionalId,
-    plannedDate: z
-      .string()
-      .optional()
-      .transform((value) => value ?? '')
-      .refine((value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), 'Use a date'),
-    plannedTime: z
-      .string()
-      .optional()
-      .transform((value) => value ?? '')
-      .refine((value) => value === '' || /^\d{2}:\d{2}$/.test(value), 'Use a time such as 09:30'),
+    plannedDate,
+    plannedTime,
     description: optionalText(5000),
     caption: optionalText(5000),
     cta: optionalText(200),
@@ -60,9 +69,13 @@ export const contentItemSchema = z
       .transform((value) => parseHashtags(value ?? '')),
     notes: optionalText(5000),
   })
-  .refine((value) => value.plannedTime === '' || value.plannedDate !== '', {
-    path: ['plannedDate'],
-    message: 'Choose a date for this time',
-  });
+  .refine((value) => value.plannedTime === '' || value.plannedDate !== '', timeNeedsDate);
 
 export type ContentItemInput = z.infer<typeof contentItemSchema>;
+
+/** Publish date and owner: what can still change once a version is locked for review. */
+export const contentPlanSchema = z
+  .object({ ownerUserId: optionalId, plannedDate, plannedTime })
+  .refine((value) => value.plannedTime === '' || value.plannedDate !== '', timeNeedsDate);
+
+export type ContentPlanInput = z.infer<typeof contentPlanSchema>;

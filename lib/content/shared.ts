@@ -39,7 +39,8 @@ export const CONTENT_STATUS_HELP: Record<ContentStatus, string> = {
   IDEA: 'A rough idea, not being written yet.',
   DRAFT: 'Being written and designed.',
   IN_REVIEW: 'Submitted and waiting for a manager, admin or owner to review it. Locked meanwhile.',
-  CHANGES_REQUESTED: 'A reviewer asked for changes. Start a new version, make them and submit again.',
+  CHANGES_REQUESTED:
+    'A reviewer asked for changes. Start a new version, make them and submit again.',
   APPROVED: 'Approved. Starting a new version sends it back to draft.',
   SCHEDULED: 'Approved and queued in the publishing tool.',
   PUBLISHED: 'Live on the platform.',
