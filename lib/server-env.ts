@@ -25,6 +25,12 @@ const serverEnvSchema = z.object({
   ASSET_STORAGE: z.enum(['supabase', 'local']).optional(),
   /** Folder for ASSET_STORAGE=local. Defaults to .scopie-assets in the app folder. */
   ASSET_LOCAL_DIR: z.string().min(1).optional(),
+  /** Optional. With it, a model words the insights; without it, Scopie's own rules do. */
+  OPENAI_API_KEY: z.string().min(20).optional(),
+  /** The OpenAI model that words insights. */
+  AI_MODEL_INSIGHTS: z.string().min(1).max(100).optional(),
+  /** Analyses per organization per day that may call the model (default 20). */
+  AI_MAX_RUNS_PER_DAY: z.coerce.number().int().min(0).max(1000).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -53,6 +59,9 @@ export function serverEnv(): ServerEnv {
     YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
     ASSET_STORAGE: process.env.ASSET_STORAGE,
     ASSET_LOCAL_DIR: process.env.ASSET_LOCAL_DIR,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    AI_MODEL_INSIGHTS: process.env.AI_MODEL_INSIGHTS,
+    AI_MAX_RUNS_PER_DAY: process.env.AI_MAX_RUNS_PER_DAY,
   });
 }
 
