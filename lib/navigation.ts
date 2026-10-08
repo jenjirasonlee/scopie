@@ -106,7 +106,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Strategy',
     segment: 'strategy',
     icon: Target,
-    status: 'planned',
+    status: 'available',
     phase: 7,
     summary: 'Strategies per market with objectives, pillars and KPIs.',
     planned: [

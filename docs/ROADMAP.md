@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 6 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 7 is next. Last updated: 2026-10-08
+> Status: Phases 1 to 7 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 8 is next. Last updated: 2026-10-08
 
 ## 1. Product focus
 
@@ -39,7 +39,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **4** Benchmarking + YouTube ✅           | Benchmark groups, rankings with their basis, country vs country, period comparisons; YouTube public collector (API key, no Meta needed)                                                                                                                                                        | Rankings exclude non-comparable values; a YouTube channel is observed with no OAuth                                 |
 | **5** Content management + calendar ✅    | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
 | **6** Review + approval ✅                | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
-| **7** Content strategy                    | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
+| **7** Content strategy ✅                 | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
 | **8** AI analyst + recommendations        | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
 | **9** Weekly intelligence reports         | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
 | **10** More platforms                     | Facebook Pages public data (after Meta's Page Public Content Access approval), Instagram hashtag search (after approval), TikTok, X, LinkedIn through official access or a licensed provider; CSV import until then                                                                            | Each with an honest public/private capability list                                                                  |
@@ -117,6 +117,12 @@ Delivered: submit for review (with a note), withdraw, approve, request changes a
 
 Not built yet: email notifications (no email provider is set up), configurable approval rules (who may approve their own work, multi-step approval), and the automatic move to Analysed after publishing (needs post metrics linked to content; a published item can already be linked to its post in the database).
 
-## 12. Next step
+## 12. Phase 7 outcome
 
-**Phase 7: Content strategy.** Strategies per market, objectives and KPIs, pillar targets, coverage.
+Delivered: strategies with a name, summary, period, markets and platforms (empty means all), status (draft, active, archived), tone of voice, priorities, audiences and the competitor profiles they watch. Objectives with a KPI and a target: published content, posts per week, follower growth, or tracked outside Scopie. Target shares per content pillar, adding up to at most 100%. Content items can link to one objective. The strategy page shows pillar coverage (content planned and published in the strategy's period, markets and platforms, per pillar, against its target share) and objective progress. Progress is measured only from stored data: content marked published, and posts and followers observed on the organization's own profiles. When something can't be measured, the page says why instead of showing 0; profiles left out of a total are named with the reason. Managers, admins and owners edit strategies; everyone in the organization reads them. A DEMO strategy in the seed.
+
+Not built yet: KPIs on engagement or reach (they need an agreed definition across platforms first), strategies per account group, and a link from published posts (not content items) to objectives.
+
+## 13. Next step
+
+**Phase 8: AI analyst + recommendations.** Provider layer, topics and content gaps from public posts, insights with evidence, recommendations with computed confidence. Needs an OpenAI API key, set as a server environment variable.

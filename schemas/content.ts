@@ -58,6 +58,7 @@ export const contentItemSchema = z
     campaignId: optionalId,
     audienceId: optionalId,
     ctaTypeId: optionalId,
+    strategyObjectiveId: optionalId,
     plannedDate,
     plannedTime,
     description: optionalText(5000),

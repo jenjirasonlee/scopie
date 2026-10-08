@@ -4,7 +4,7 @@
 
 Scopie is an open-source platform for social media analytics, cross-market benchmarking, content planning, review and approval, and evidence-based AI recommendations. It starts as an internal tool for a marketing team managing ~30 social accounts across countries (CANNA Corporate), and is built multi-tenant so any organization can run it.
 
-> **Status: Phase 6 (review + approval).** Track any public Instagram business or creator account or public YouTube channel, including competitors, by username or handle, with no login from the account owner. Scopie observes them every day through the platforms' official APIs, builds its own history, and ranks profiles only on numbers that are comparable. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Plan content with its copy, files and versions, see it on a calendar, and send it through review and approval. Strategy and AI are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phase 7 (content strategy).** Track any public Instagram business or creator account or public YouTube channel, including competitors, by username or handle, with no login from the account owner. Scopie observes them every day through the platforms' official APIs, builds its own history, and ranks profiles only on numbers that are comparable. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Plan content with its copy, files and versions, see it on a calendar, send it through review and approval, and plan strategies per market with objectives and pillar targets. AI and reports are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Why Scopie exists
 
@@ -41,7 +41,8 @@ Marketing teams running many accounts across countries and platforms end up with
 | Content: ideas and drafts with copy, plan, files and kept versions                                                                          | Working; file uploads need `ASSET_STORAGE` (see `.env.example`)                                                 |
 | Calendar: month, week and list, filters, move to another day                                                                                | Working                                                                                                         |
 | Review and approval: submit, approve, request changes, reject, history, comments, mentions                                                  | Working; notifications are in-app only                                                                          |
-| Strategy, reports, AI                                                                                                                       | Not yet. Placeholder pages say "Coming in a future phase."                                                      |
+| Strategy: markets, period, objectives with KPIs, pillar targets, coverage and progress                                                      | Working; progress counts only stored data                                                                       |
+| Reports, AI                                                                                                                                 | Not yet. Placeholder pages say "Coming in a future phase."                                                      |
 
 ## Architecture
 

@@ -10,7 +10,8 @@
  *
  * Everything created here is fictional. No real CANNA accounts, credentials or data.
  * It also adds a DEMO content taxonomy (pillars, formats, campaigns, audiences, CTA types) and
- * DEMO content items planned around today, so the content list and calendar have something to show.
+ * DEMO content items planned around today, so the content list and calendar have something to show,
+ * and an active DEMO strategy for the current quarter with pillar targets and objectives.
  *
  * Accounts get connection_status 'demo' and data_source 'demo', which the UI labels as DEMO.
  * Safe to re-run: existing demo rows are updated, not duplicated.
@@ -21,6 +22,7 @@ import type { Database, TablesInsert } from '../lib/db/types';
 import { generateDemoAccount } from '../lib/demo/generate';
 import { ingest } from '../lib/ingest/ingest';
 import { utcToZonedParts, zonedDateTimeToUtc } from '../lib/calendar/time';
+import { quarterOf } from '../lib/strategy/shared';
 
 config({ path: '.env.local', quiet: true });
 config({ quiet: true });
@@ -377,11 +379,14 @@ async function main() {
 
   const reviews = await seedReviews(url, password, org.id, ownerId);
 
+  const strategy = await seedStrategy(supabase, org.id, ownerId);
+
   console.log(`Seeded DEMO DATA into "${org.name}" (/${org.slug}/dashboard)`);
   console.log(`  ${accounts.length} demo social accounts (${created} new)`);
   console.log(`  ${posts} DEMO posts and ${facts} new DEMO metric values`);
   console.log(`  ${content.items} DEMO content items (${content.created} new) and a DEMO taxonomy`);
   console.log(`  ${reviews}`);
+  console.log(`  ${strategy}`);
   console.log(
     `  Sign in as ${DEMO_USER_EMAIL} (owner), ${DEMO_TEAM.map((m) => `${m.email} (${m.role.toLowerCase()})`).join(', ')}`,
   );
@@ -704,3 +709,152 @@ main().catch((error: unknown) => {
   console.error('Seeding failed:', error);
   process.exit(1);
 });
+
+const DEMO_STRATEGY = {
+  name: 'Autumn Europe (DEMO)',
+  summary:
+    'DEMO DATA. Grow the home grower community in our biggest European markets this quarter.',
+  countryCodes: ['NL', 'DE', 'ES', 'GB'],
+  toneOfVoice: 'DEMO DATA. Friendly and expert. Short sentences, no jargon, no slang.',
+  priorities: [
+    'More grower stories (DEMO)',
+    'Reels first on Instagram (DEMO)',
+    'Answer every question within a day (DEMO)',
+  ],
+  // Shares of output per DEMO pillar, by DEMO_TAXONOMY.content_pillars index.
+  pillars: [
+    { pillar: 0, targetShare: 40 },
+    { pillar: 1, targetShare: 30 },
+    { pillar: 2, targetShare: 30 },
+  ],
+  objectives: [
+    { name: 'Publish 12 pieces of content (DEMO)', kpi: 'published_content', target: 12 },
+    { name: 'Post 5 times a week (DEMO)', kpi: 'posts_per_week', target: 5 },
+    { name: 'Gain 2,000 followers (DEMO)', kpi: 'follower_growth', target: 2000 },
+    { name: 'More stockist mentions (DEMO)', kpi: 'manual', target: null },
+  ],
+  // Content items linked to an objective, by title and objective index.
+  links: [
+    { title: 'Autumn feeding tips reel (DEMO)', objective: 0 },
+    { title: 'pH basics explainer (DEMO)', objective: 0 },
+    { title: 'Grower of the month (DEMO)', objective: 2 },
+  ],
+} as const;
+
+/** A DEMO strategy for the current quarter. Safe to re-run: matched by name. */
+async function seedStrategy(
+  supabase: ReturnType<typeof createClient<Database>>,
+  orgId: string,
+  ownerId: string,
+) {
+  const period = quarterOf(utcToZonedParts(new Date(), DEMO_ORG.default_timezone).date);
+  const { data: existing, error: findError } = await supabase
+    .from('strategies')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('name', DEMO_STRATEGY.name)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (existing) return `DEMO strategy "${DEMO_STRATEGY.name}" already there`;
+
+  const { data: strategy, error } = await supabase
+    .from('strategies')
+    .insert({
+      organization_id: orgId,
+      name: DEMO_STRATEGY.name,
+      summary: DEMO_STRATEGY.summary,
+      status: 'active',
+      period_start: period.start,
+      period_end: period.end,
+      country_codes: [...DEMO_STRATEGY.countryCodes],
+      tone_of_voice: DEMO_STRATEGY.toneOfVoice,
+      priorities: [...DEMO_STRATEGY.priorities],
+      created_by: ownerId,
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+
+  const byName = async (table: 'content_pillars' | 'audiences', names: readonly string[]) => {
+    const { data, error } = await supabase
+      .from(table)
+      .select('id, name')
+      .eq('organization_id', orgId)
+      .in('name', [...names]);
+    if (error) throw error;
+    return names.map((name) => data.find((row) => row.name === name)!.id);
+  };
+  const pillarIds = await byName(
+    'content_pillars',
+    DEMO_TAXONOMY.content_pillars.map((p) => p.name),
+  );
+  const audienceIds = await byName(
+    'audiences',
+    DEMO_TAXONOMY.audiences.map((a) => a.name),
+  );
+
+  const { data: objectives, error: objectiveError } = await supabase
+    .from('strategy_objectives')
+    .insert(
+      DEMO_STRATEGY.objectives.map((o, position) => ({
+        organization_id: orgId,
+        strategy_id: strategy.id,
+        name: o.name,
+        description: 'DEMO DATA.',
+        kpi: o.kpi,
+        target_value: o.target,
+        position,
+      })),
+    )
+    .select('id, position');
+  if (objectiveError) throw objectiveError;
+  const objectiveAt = (position: number) => objectives.find((o) => o.position === position)!.id;
+
+  const { error: pillarError } = await supabase.from('strategy_pillars').insert(
+    DEMO_STRATEGY.pillars.map((p) => ({
+      organization_id: orgId,
+      strategy_id: strategy.id,
+      pillar_id: pillarIds[p.pillar]!,
+      target_share: p.targetShare,
+    })),
+  );
+  if (pillarError) throw pillarError;
+
+  const { error: audienceError } = await supabase.from('strategy_audiences').insert(
+    audienceIds.map((audienceId) => ({
+      organization_id: orgId,
+      strategy_id: strategy.id,
+      audience_id: audienceId,
+    })),
+  );
+  if (audienceError) throw audienceError;
+
+  const { data: competitors, error: competitorFindError } = await supabase
+    .from('social_accounts')
+    .select('id')
+    .eq('organization_id', orgId)
+    .eq('business_role', 'competitor')
+    .in('country_code', [...DEMO_STRATEGY.countryCodes]);
+  if (competitorFindError) throw competitorFindError;
+  if (competitors.length) {
+    const { error: competitorError } = await supabase.from('strategy_competitors').insert(
+      competitors.map((c) => ({
+        organization_id: orgId,
+        strategy_id: strategy.id,
+        social_account_id: c.id,
+      })),
+    );
+    if (competitorError) throw competitorError;
+  }
+
+  for (const link of DEMO_STRATEGY.links) {
+    const { error: linkError } = await supabase
+      .from('content_items')
+      .update({ strategy_objective_id: objectiveAt(link.objective) })
+      .eq('organization_id', orgId)
+      .eq('title', link.title);
+    if (linkError) throw linkError;
+  }
+
+  return `DEMO strategy "${DEMO_STRATEGY.name}" for ${period.start} to ${period.end}`;
+}
