@@ -4,7 +4,7 @@
 
 Scopie is an open-source platform for social media analytics, cross-market benchmarking, content planning, review and approval, and evidence-based AI recommendations. It starts as an internal tool for a marketing team managing ~30 social accounts across countries (CANNA Corporate), and is built multi-tenant so any organization can run it.
 
-> **Status: Phase 7 (content strategy).** Track any public Instagram business or creator account or public YouTube channel, including competitors, by username or handle, with no login from the account owner. Scopie observes them every day through the platforms' official APIs, builds its own history, and ranks profiles only on numbers that are comparable. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Plan content with its copy, files and versions, see it on a calendar, send it through review and approval, and plan strategies per market with objectives and pillar targets. AI and reports are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phase 8 (AI analyst + recommendations).** Track any public Instagram business or creator account or public YouTube channel, including competitors, by username or handle, with no login from the account owner. Scopie observes them every day through the platforms' official APIs, builds its own history, and ranks profiles only on numbers that are comparable. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Plan content with its copy, files and versions, see it on a calendar, send it through review and approval, plan strategies per market with objectives and pillar targets, and get insights and recommendations with their evidence (written by Scopie's rules, or worded by an AI model when a key is set). Weekly reports are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Why Scopie exists
 
@@ -42,7 +42,8 @@ Marketing teams running many accounts across countries and platforms end up with
 | Calendar: month, week and list, filters, move to another day                                                                                | Working                                                                                                         |
 | Review and approval: submit, approve, request changes, reject, history, comments, mentions                                                  | Working; notifications are in-app only                                                                          |
 | Strategy: markets, period, objectives with KPIs, pillar targets, coverage and progress                                                      | Working; progress counts only stored data                                                                       |
-| Reports, AI                                                                                                                                 | Not yet. Placeholder pages say "Coming in a future phase."                                                      |
+| AI Insights: insights with evidence, recommendations with computed confidence, content ideas from them                                      | Working without a key; `OPENAI_API_KEY` lets a model word them                                                  |
+| Weekly reports                                                                                                                              | Not yet. The placeholder page says "Coming in a future phase."                                                  |
 
 ## Architecture
 
@@ -51,7 +52,7 @@ Marketing teams running many accounts across countries and platforms end up with
 - **Tailwind CSS + shadcn/ui-style components + Lucide icons.**
 - **Zod** for validation, **Vitest** and **Playwright** for tests.
 - **Trigger.dev** runs the sync worker every 15 minutes (or run `pnpm sync:worker --watch` on any server).
-- Planned: **OpenAI** behind a provider interface for AI.
+- **OpenAI** (optional) behind a provider interface for AI wording; without it Scopie's rules write the insights.
 
 Domain logic lives in `lib/<domain>`; routes in `app/` stay thin. Security is enforced in the database (RLS), and the app adds friendly permission checks on top. Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATABASE.md](docs/DATABASE.md).
 

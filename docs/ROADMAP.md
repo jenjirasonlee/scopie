@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 7 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 8 is next. Last updated: 2026-10-08
+> Status: Phases 1 to 8 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 9 is next. Last updated: 2026-10-08
 
 ## 1. Product focus
 
@@ -40,7 +40,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **5** Content management + calendar ✅    | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
 | **6** Review + approval ✅                | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
 | **7** Content strategy ✅                 | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
-| **8** AI analyst + recommendations        | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
+| **8** AI analyst + recommendations ✅     | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
 | **9** Weekly intelligence reports         | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
 | **10** More platforms                     | Facebook Pages public data (after Meta's Page Public Content Access approval), Instagram hashtag search (after approval), TikTok, X, LinkedIn through official access or a licensed provider; CSV import until then                                                                            | Each with an honest public/private capability list                                                                  |
 | **11** Productivity + career intelligence | Workflow stats, career intelligence, AI chat and content assistant, PDF export                                                                                                                                                                                                                 | —                                                                                                                   |
@@ -123,6 +123,14 @@ Delivered: strategies with a name, summary, period, markets and platforms (empty
 
 Not built yet: KPIs on engagement or reach (they need an agreed definition across platforms first), strategies per account group, and a link from published posts (not content items) to objectives.
 
-## 13. Next step
+## 13. Phase 8 outcome
 
-**Phase 8: AI analyst + recommendations.** Provider layer, topics and content gaps from public posts, insights with evidence, recommendations with computed confidence. Needs an OpenAI API key, set as a server environment variable.
+Delivered: an AI Insights page. A manager runs an analysis; Scopie compares the last 28 days with the 28 before, from stored data only, and finds signals: changes in follower growth and posting frequency, formats that do better or worse than each profile's usual, formats and topics (hashtags) that do well for competitors and that the organization uses less, single posts far above their profile's usual, and pillars under their target in a running strategy. Each insight shows its evidence (value, sample size, period, method, profiles). Recommendations come with a suggested experiment and a confidence computed from sample size, agreement across profiles and effect size; a writer can only lower it. Editors and up turn a recommendation into a content idea (linked to it), dismiss it with a reason, or mark it done.
+
+It works without any AI key: Scopie's own rules write the text from the numbers, and the page says so. With `OPENAI_API_KEY` set on the server, a model rewords the insights; every number it writes must appear in the cited evidence, causal wording is refused, and anything that fails keeps Scopie's text. The model gets only computed values and names of business profiles, never captions, links, ids or personal data. Every model call is kept in `ai_generations`. Runs are limited to one every two minutes per organization and 20 model runs a day (`AI_MAX_RUNS_PER_DAY`).
+
+Not built yet: scheduled weekly runs (Phase 9), trends over 8 to 12 weeks and anomaly scores over longer baselines, an organization setting to switch the model off, cost tracking per call, and checking later whether a followed recommendation was followed by better results.
+
+## 14. Next step
+
+**Phase 9: Weekly intelligence reports.** Scheduled weekly report, snapshot, in-app view, sharing.

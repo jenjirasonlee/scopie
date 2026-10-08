@@ -13,6 +13,7 @@ Migrations:
 - `supabase/migrations/20261010000200_content_hub.sql` (Phase 5, Content management + calendar; §6)
 - `supabase/migrations/20261011000100_review_approval.sql` (Phase 6, Review + approval; §6)
 - `supabase/migrations/20261012000100_content_strategy.sql` (Phase 7, Content strategy; §6)
+- `supabase/migrations/20261013000100_ai_analyst.sql` (Phase 8, AI analyst + recommendations; §8.4)
 
 Phase 1:
 
@@ -60,7 +61,7 @@ Phase 3:
 Existing data was migrated in place: `authenticated` → `live_connected`, `public` → `live_public`,
 `manual` → `imported`; `is_competitor = true` → `competitor`, otherwise `owned`.
 
-Not yet created: invitations, AI and reports (§8.3).
+Not yet created: invitations and reports (§8.3).
 
 How data moves through these tables end to end (sync schedule, failure handling) is in [DATA_PIPELINE.md](DATA_PIPELINE.md); what each metric means is in [METRICS.md](METRICS.md).
 
@@ -561,7 +562,7 @@ Implemented in `…_review_approval.sql` (Phase 6):
 
 From IN_REVIEW on, the title, platforms, country and taxonomy are locked; the owner and planned date can still change until published. PUBLISHED → ANALYSED is not automated yet.
 
-Not built yet: `source_recommendation_id`, `duration_seconds`, multi-step approval (`step`), configurable self-approval.
+Not built yet: `duration_seconds`, multi-step approval (`step`), configurable self-approval.
 
 ```sql
 create type content_status as enum
@@ -739,7 +740,7 @@ Members can read `sync_state`, `sync_runs` and `sync_run_events`; only the servi
 create table benchmark_groups (id uuid pk, organization_id uuid, name text, description text, platform_key text null);
 create table benchmark_group_members (group_id uuid, social_account_id uuid, primary key (group_id, social_account_id));
 
--- Phase 8: AI analyst + recommendations
+-- Phase 8: AI analyst + recommendations. Built differently; see §8.4. The sketch:
 create table ai_generations (            -- audit of every model call
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null,
@@ -767,6 +768,17 @@ create table report_sections (id uuid pk, report_id uuid, organization_id uuid, 
 
 -- notifications: built in Phase 6 (§6).
 ```
+
+### 8.4 AI analyst (implemented, Phase 8)
+
+`…_ai_analyst.sql`:
+
+- `analysis_runs`: one per analysis. Period, `data_source` read, `writer` (`rules` or `model`, with provider, model and prompt version), status, `signals` (every signal found, with its evidence, as computed by `lib/ai/signals.ts`), `rejected` (model text that failed the checks, and why), `created_by`.
+- `ai_generations`: every model call: input sent (allow-listed fields only), output, error, tokens, duration. Managers and up read it.
+- `ai_insights`: kind, title, body, severity, `signal_ids` (at least one), `evidence` (a copy of the cited evidence), `account_ids`, position.
+- `ai_recommendations`: title, observation, recommendation, expected impact, `confidence` and `confidence_basis` (computed by `lib/ai/confidence.ts`), `signal_ids`, `evidence`, `account_ids`, `experiment`, and `status` (`open`, `accepted`, `dismissed`, `done`) with note, who and when.
+- `content_items.source_recommendation_id`: set when an idea is created from a recommendation; users can't change it afterwards.
+- Members read runs, insights and recommendations. Nobody writes them through the API: the server saves them with the service role after checking `strategy.manage`. `set_recommendation_status(id, status, note)` (EDITOR+, `content.edit`) changes only the status and note.
 
 ## 9. Indexing and scale plan
 
