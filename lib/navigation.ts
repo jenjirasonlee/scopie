@@ -65,7 +65,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Content',
     segment: 'content',
     icon: LayoutGrid,
-    status: 'planned',
+    status: 'available',
     phase: 5,
     summary: 'Content hub for ideas, drafts and published content.',
     planned: [
@@ -79,7 +79,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Calendar',
     segment: 'calendar',
     icon: Calendar,
-    status: 'planned',
+    status: 'available',
     phase: 5,
     summary: 'Month, week and list views of planned and published content.',
     planned: [

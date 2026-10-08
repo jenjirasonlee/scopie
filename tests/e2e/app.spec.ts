@@ -8,6 +8,7 @@ import {
   TEST_PASSWORD,
   uniqueEmail,
 } from '../support/supabase';
+import { utcToZonedParts } from '../../lib/calendar/time';
 
 // End-to-end flows against the real app and a real Supabase stack.
 // Form fields are located by id: Next.js keeps recently visited pages mounted (hidden),
@@ -383,4 +384,72 @@ test('YouTube channels without OAuth, ranked in benchmarks only on what was obse
   await page.locator('input[name="name"]:visible').first().fill('Dutch channels');
   await page.getByRole('button', { name: /Create/ }).click();
   await expect(page.getByText('Dutch channels').first()).toBeVisible();
+});
+
+test('create content with a file and a pillar, and see it on the calendar', async ({ page }) => {
+  const user = await createUser('e2e-content');
+  const org = await createOrg(user, 'Content Org');
+  await signIn(page, user.email);
+
+  // A content pillar to tag it with.
+  await page.goto(`/${org.slug}/settings/taxonomy`);
+  await page.locator('#new-pillars-name:visible').fill('Grow knowledge');
+  await page.getByRole('button', { name: /Add pillar/i }).click();
+  await expect(page.getByRole('button', { name: 'Deactivate Grow knowledge' })).toBeVisible();
+
+  // Plan it three days from now, in the organization's time zone.
+  const { date } = utcToZonedParts(new Date(Date.now() + 3 * 86_400_000), org.default_timezone);
+  await page.goto(`/${org.slug}/content/new`);
+  await page.locator('#title:visible').fill('Autumn feeding tips reel');
+  await page.locator('input[name="platformKeys"][value="instagram"]:visible').check();
+  await page.locator('#plannedDate:visible').fill(date);
+  await page.locator('#plannedTime:visible').fill('10:30');
+  await page.locator('#pillarId:visible').selectOption({ label: 'Grow knowledge' });
+  await page.locator('#caption:visible').fill('Feed little and often #hydro');
+  await page.getByRole('button', { name: /Create|Save/ }).click();
+  await page.waitForURL(/\/content\/[0-9a-f-]{36}/);
+  const itemUrl = new URL(page.url());
+
+  // Upload a tiny PNG to version 1.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  );
+  await page
+    .locator('#content-files:visible')
+    .setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: png });
+  await page.getByRole('button', { name: 'Upload' }).click();
+  await expect(page.getByText('File added.')).toBeVisible();
+  await expect(page.getByText('cover.png').first()).toBeVisible();
+  const src = await page.locator('img[alt="cover.png"]').getAttribute('src');
+  const file = await page.request.get(src!);
+  expect(file.status()).toBe(200);
+  expect(file.headers()['content-type']).toBe('image/png');
+
+  // A file that only claims to be an image is refused.
+  await page.locator('#content-files:visible').setInputFiles({
+    name: 'fake.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+  });
+  await page.getByRole('button', { name: 'Upload' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: /fake\.png/ })).toBeVisible();
+
+  // On the calendar, on the planned day, and its details open in a panel.
+  await page.goto(`/${org.slug}/calendar?view=month&date=${date}`);
+  await page
+    .getByRole('link', { name: /Autumn feeding tips reel/ })
+    .first()
+    .click();
+  const panel = page.locator('aside[aria-labelledby="item-panel-title"]');
+  await expect(panel.getByText('Autumn feeding tips reel')).toBeVisible();
+  await expect(panel.getByText(/10:30/)).toBeVisible();
+  await expect(panel.getByText('1 file')).toBeVisible();
+  await expect(panel.getByText('Grow knowledge')).toBeVisible();
+
+  // Archived content leaves the calendar but is kept.
+  await page.goto(itemUrl.pathname);
+  await page.getByRole('button', { name: /Archive/ }).click();
+  await page.goto(`/${org.slug}/calendar?view=month&date=${date}`);
+  await expect(page.getByRole('link', { name: /Autumn feeding tips reel/ })).toHaveCount(0);
 });

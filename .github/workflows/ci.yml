@@ -52,6 +52,8 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
             echo "NEXT_PUBLIC_SITE_URL=http://localhost:3100"
+            echo "ASSET_STORAGE=local"
+            echo "ASSET_LOCAL_DIR=/tmp/scopie-assets"
           } > .env.local
       - run: pnpm test:integration
       - run: pnpm build

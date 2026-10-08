@@ -21,6 +21,10 @@ const serverEnvSchema = z.object({
     .string()
     .regex(/^v\d+\.\d+$/)
     .optional(),
+  /** Where content files go: a private Supabase Storage bucket, or a local folder (dev, tests). */
+  ASSET_STORAGE: z.enum(['supabase', 'local']).optional(),
+  /** Folder for ASSET_STORAGE=local. Defaults to .scopie-assets in the app folder. */
+  ASSET_LOCAL_DIR: z.string().min(1).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -47,6 +51,8 @@ export function serverEnv(): ServerEnv {
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_GRAPH_API_VERSION: process.env.META_GRAPH_API_VERSION,
     YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+    ASSET_STORAGE: process.env.ASSET_STORAGE,
+    ASSET_LOCAL_DIR: process.env.ASSET_LOCAL_DIR,
   });
 }
 

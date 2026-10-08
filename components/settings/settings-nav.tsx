@@ -8,6 +8,7 @@ const SECTIONS = [
   { segment: 'profile', label: 'Profile' },
   { segment: 'organization', label: 'Organization' },
   { segment: 'members', label: 'Members & roles' },
+  { segment: 'taxonomy', label: 'Content taxonomy' },
   { segment: 'public-data', label: 'Public data' },
   { segment: 'connections', label: 'Connections' },
 ];
@@ -16,7 +17,7 @@ export function SettingsNav() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const pathname = usePathname();
   return (
-    <nav aria-label="Settings" className="flex gap-1 md:flex-col">
+    <nav aria-label="Settings" className="flex flex-wrap gap-1 md:flex-col">
       {SECTIONS.map((section) => {
         const href = `/${orgSlug}/settings/${section.segment}`;
         const active = pathname === href;
