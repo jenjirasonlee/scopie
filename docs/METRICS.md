@@ -1,6 +1,6 @@
 # Scopie — Metrics
 
-> Status: dictionary built in Phase 2. Last updated: 2026-10-07
+> Status: dictionary built in Phase 2; public metrics, sources and availability reasons added in Phase 3. Last updated: 2026-10-07
 
 The metric dictionary is `METRIC_DEFINITIONS` in `lib/metrics/registry.ts`, mirrored in the
 `metric_definitions` table (a test checks they match). Every number on screen uses a key from it.
@@ -9,19 +9,21 @@ The metric dictionary is `METRIC_DEFINITIONS` in `lib/metrics/registry.ts`, mirr
 
 1. **Each metric has one meaning.** Reach is unique accounts reached; impressions and views count
    every time content was shown. They are never swapped for each other.
-2. **Unknown is not zero.** A number a platform withholds is stored as `not_permitted`, one still being
-   calculated as `pending`, a failed read as `error`, and one that doesn't apply (watch time on an
-   image) as `not_applicable`. None of them carries a value.
+2. **Unknown is not zero.** A missing number is stored with a reason and no value (§5).
 3. **Derived metrics are computed, never stored.** Engagement rates, follower change and growth rate
    are calculated from stored values when shown, so their formula can't drift.
-4. **Compare like with like.** Two values may be compared or added up only when their comparability
-   class matches (see §3).
+4. **Compare like with like.** Two values are compared only when they share the metric key, the
+   comparability class (§3) and the data source (§5).
+5. **Every value says where it came from.** Each stored value carries its data source, shown as a
+   label next to the number.
 
 ## 2. Dictionary
 
 | Key                                                                | Label                  | Unit    | Combines over time | Applies to      |
 | ------------------------------------------------------------------ | ---------------------- | ------- | ------------------ | --------------- |
 | `followers`                                                        | Followers              | count   | last value         | accounts        |
+| `following`                                                        | Following              | count   | last value         | accounts        |
+| `posts_total`                                                      | Posts on profile       | count   | last value         | accounts        |
 | `followers_gained`                                                 | Followers gained       | count   | sum                | accounts        |
 | `followers_lost`                                                   | Followers lost         | count   | sum                | accounts        |
 | `reach`                                                            | Reach                  | count   | not additive       | accounts, posts |
@@ -34,9 +36,14 @@ The metric dictionary is `METRIC_DEFINITIONS` in `lib/metrics/registry.ts`, mirr
 | `avg_watch_duration`                                               | Average watch duration | seconds | recompute          | posts           |
 | `completion_rate`                                                  | Completion rate        | percent | recompute          | posts           |
 
-Derived (never stored): `follower_change`, `follower_growth_rate`, `posts_published` and the three
-engagement rates (by reach, by impressions, by followers). Their inputs are listed in the registry and
+Derived (never stored): `follower_change`, `follower_growth_rate`, `posts_published`,
+`public_engagement` and the three engagement rates (by reach, by impressions, by followers). Their inputs are listed in the registry and
 their formulas in the `metric_definitions.formula` column.
+
+**Public engagement** is likes plus comments: the engagement anyone can see. Scopie computes it; it
+is not the platform's own engagement figure (`interactions`, which only connected accounts have).
+`posts_total` is the post count the platform reports for the profile. `following` is in the
+dictionary, but Business Discovery doesn't return it as public, so public profiles don't have it.
 
 The registry is the place to check exact keys, units and "higher is better"; this table is a summary.
 
@@ -50,10 +57,18 @@ Each platform metric maps to a Scopie metric and a comparability class (`PLATFOR
 mirrored in `platform_metric_map`):
 
 - Instagram and Facebook reach share the class `meta_reach`, so they can be compared.
-- Followers on any platform share `audience_size`.
+- Followers on any platform share `audience_size`, from insights or from Business Discovery.
+- Likes and comments from Business Discovery share `likes` and `comments` with the insights values.
+- Post count from Business Discovery is `posts_total`.
+- **Instagram public Reel views** (`business_discovery.view_count`) are `ig_public_reel_views`. They
+  include paid views and exist only for Reels, so they are never compared with insights `views`
+  (`meta_views`), even on the same account.
 - Facebook reactions (`fb_reactions`) and Instagram likes (`likes`) are different classes.
 - A metric with no mapping, such as an imported LinkedIn impression, gets the class
   `<platform>:<metric>` and is only compared within that platform.
+
+`comparabilityClass()` takes the source metric when it is known, because one Scopie metric can come
+from sources that are not comparable (Reel views above).
 
 ## 4. Snapshots
 
@@ -63,3 +78,51 @@ and the `post_metrics_at_age` view finds the snapshot closest to a given age (wi
 
 Account metrics are daily values dated in the platform's reporting timezone. Followers is a running
 total dated the day it was read.
+
+Public profiles have no daily insights. Their follower history is Scopie's own observations: one
+`lifetime` value a day from the day the profile was added. Nothing before that is shown or estimated.
+
+## 5. Data sources and availability
+
+Every stored value carries a data source:
+
+| Source           | Label     | Meaning                                                                   |
+| ---------------- | --------- | ------------------------------------------------------------------------- |
+| `live_public`    | PUBLIC    | Observed from public platform data, without the owner's login             |
+| `live_connected` | CONNECTED | Read through the owner's connection, including private metrics            |
+| `imported`       | IMPORTED  | From a CSV file                                                           |
+| `estimated`      | ESTIMATED | Reserved. Nothing produces it yet, and it is never mixed with live values |
+| `demo`           | DEMO      | Generated for testing; only in demo organizations                         |
+
+**Comparison rule.** Two values are compared only if they share the metric key, the comparability
+class and the data source. A connected CANNA profile is compared with competitors on its
+`live_public` values, not its insights. A metric missing for one side is shown as unavailable for that
+side, not as zero.
+
+A value that couldn't be read has an availability reason instead of a number:
+
+| Availability      | Shown as        | When                                                                                    |
+| ----------------- | --------------- | --------------------------------------------------------------------------------------- |
+| `available`       | the value       | The platform returned it                                                                |
+| `not_permitted`   | not shared      | A permission is missing or the platform withheld it                                     |
+| `not_applicable`  | n/a             | It doesn't apply, for example views on an Instagram photo                               |
+| `hidden_by_owner` | hidden by owner | The owner hides it, for example Instagram like counts                                   |
+| `not_public`      | not public      | Only the account owner can see it, such as reach, saves and shares for a public profile |
+| `pending`         | pending         | The platform hasn't reported that day yet                                               |
+| `error`           | error           | The read failed                                                                         |
+
+The public collector doesn't request private metrics at all, so no `not_public` rows are stored
+today; the reason exists so screens can say why such a metric is missing.
+
+## 6. Dashboard and analytics
+
+The dashboard and analytics (`lib/analytics`) compute everything from stored observations. Nothing is
+interpolated or back-filled. The rules, from [PHASE_3_PLAN.md](PHASE_3_PLAN.md) §8:
+
+- **Observed growth:** first and last follower observation inside the range, `(last − first) / first`,
+  shown with both dates. Needs at least two observations at least 24 hours apart.
+- **Posting frequency:** posts per week from `published_at`, only for periods after
+  `earliest_post_at`, so incomplete history isn't counted as "no posts".
+- **Public engagement per post:** likes plus comments at a fixed post age (7 days by default), median
+  and mean, with the post count. Posts with hidden likes are excluded, and the count says so.
+- **Comparisons** follow the rule in §5.

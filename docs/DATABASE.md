@@ -1,6 +1,6 @@
 # Scopie — Database Design
 
-> PostgreSQL on Supabase. Status: §3, §4 and §5 are implemented (Phases 1 and 2); §6 onward is the target design for later phases. Last updated: 2026-10-07
+> PostgreSQL on Supabase. Status: §3, §4, §5 and §8.1–8.2 are implemented (Phases 1, 2 and 3); §6 and §8.3 are the target design for later phases. Last updated: 2026-10-07
 
 ## 0. What is implemented
 
@@ -8,6 +8,7 @@ Migrations:
 
 - `supabase/migrations/20261006000100_tenancy_and_roles.sql` and `…000200_social_accounts.sql` (Phase 1, Foundation)
 - `supabase/migrations/20261007000100_data_pipeline.sql` (Phase 2, Real social data pipeline)
+- `supabase/migrations/20261008000100_public_intelligence.sql` (Phase 3, Public profile intelligence)
 
 Phase 1:
 
@@ -18,7 +19,7 @@ Phase 1:
 | `organizations`                           | Created only through `create_organization()` (makes the caller OWNER). `is_demo` flags demo orgs; only demo orgs may hold `demo` data (§5.5).                                                                                       |
 | `organization_members`                    | Role per user. Only OWNERs grant/change/remove OWNER. An organization always keeps one owner, except when an owner's whole user account is deleted (the organization is then left ownerless and must be reassigned by an operator). |
 | `platforms`, `countries`                  | Global reference data (8 platforms; ~55 ISO countries).                                                                                                                                                                             |
-| `social_accounts`                         | §4. Users can't set connection fields (trigger). No delete: deactivate instead. Owner must be a member. Unique handle per org+platform (case-insensitive).                                                                          |
+| `social_accounts`                         | §4. Users can't set connection fields (trigger). No direct delete: deactivate, or remove with all its data through `remove_profile_and_data()` (§8.2). Owner must be a member. Unique handle per org+platform (case-insensitive).   |
 | `account_groups`, `account_group_members` | `kind` is `region` or `custom` (country uses the account column). No UI yet.                                                                                                                                                        |
 | `activity_log`                            | Written by triggers on accounts, memberships, organization updates, platform connections and import batches.                                                                                                                        |
 
@@ -36,6 +37,24 @@ Phase 2:
 | `import_batches`                                                            | §5.8    |
 | `sync_state`, `sync_runs`, `sync_run_events`, `raw_payloads`                | §8.1    |
 | RPCs `link_connection_asset`, `unlink_social_account`, …                    | §8.2    |
+
+Phase 3:
+
+| Table / object                                                                                                                          | Section    |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `data_source` replaced: `live_public`, `live_connected`, `imported`, `estimated`, `demo`                                                | §5.5       |
+| `metric_availability` + `hidden_by_owner`, `not_public`; `sync_job_type` + three public jobs                                            | §5.4, §8.1 |
+| `platforms.public_data_status`, `private_data_status` (replace `connector_status`)                                                      | §4         |
+| `social_accounts.business_role`, `access_type` (derived by trigger), observation dates (replace `is_competitor`, `primary_data_source`) | §4         |
+| `profile_snapshots`                                                                                                                     | §4.2       |
+| `public_data_viewers`, `public_profile_lookups`                                                                                         | §4.3       |
+| `posts.hashtags` (from the caption)                                                                                                     | §5.2       |
+| Metrics `following`, `posts_total`, `public_engagement`; Business Discovery rows in `platform_metric_map`                               | §5.1, §5.6 |
+| Read models return one row per data source                                                                                              | §5.7       |
+| RPCs `set_public_data_viewer`, `clear_public_data_viewer`, `remove_profile_and_data`; new `request_sync`, `link_connection_asset`       | §8.2       |
+
+Existing data was migrated in place: `authenticated` → `live_connected`, `public` → `live_public`,
+`manual` → `imported`; `is_competitor = true` → `competitor`, otherwise `owned`.
 
 Not yet created: invitations, notifications, everything content/approval/strategy beyond the minimal taxonomy (§6), benchmarks, AI and reports (§8.3).
 
@@ -60,8 +79,10 @@ organizations ─┬─ organization_members ── auth.users (profiles)
                ├─ account_groups ── account_group_members ─┐
                ├─ platform_connections ─┬─ connection_credentials (service-role only)
                │                        └─ connection_assets ──(linked_account_id)──┐
+               │                                 └─ public_data_viewers (one per org + platform)
                ├─ social_accounts ──────────────────────────────────────────────────┘
                │     ├─ account_metric_snapshots
+               │     ├─ profile_snapshots
                │     ├─ sync_state, sync_runs ── sync_run_events, raw_payloads
                │     ├─ import_batches
                │     └─ posts ─┬─ post_media
@@ -69,6 +90,7 @@ organizations ─┬─ organization_members ── auth.users (profiles)
                │               ├─ post_metric_snapshots
                │               └─ pillar / campaign / content_format / cta_type (FK columns)
                ├─ content_pillars, content_formats, campaigns, audiences, cta_types
+               ├─ public_profile_lookups (service-role only)
                └─ activity_log
 
 Global (not tenant-owned): platforms, platform_account_types, countries,
@@ -130,12 +152,13 @@ Typical policy: `using (is_org_member(organization_id))` for select; `with check
 ## 4. Platforms and social accounts
 
 ```sql
-create type platform_connector_status as enum ('available','planned','demo_only');
+create type platform_data_status as enum ('available','planned','not_available');
 
 create table platforms (                -- global, seeded
   key text primary key,                 -- 'instagram','facebook','linkedin','youtube','tiktok','x','reddit','discord'
   name text not null,
-  connector_status platform_connector_status not null default 'planned',
+  public_data_status platform_data_status not null default 'planned',   -- read without the owner's login
+  private_data_status platform_data_status not null default 'planned',  -- read through OAuth
   reporting_timezone text,              -- calendar the platform's daily numbers use
   sort_order int not null default 100
 );
@@ -152,7 +175,9 @@ create table countries (code char(2) primary key, name text not null);  -- ISO 3
 create type account_connection_status as enum
   ('not_connected','connected','needs_reauth','error','demo');
 create type data_source as enum
-  ('authenticated','public','manual','imported','demo');
+  ('live_public','live_connected','imported','estimated','demo');
+create type business_role as enum ('owned','competitor','industry','influencer','other');
+create type profile_access_type as enum ('public','connected','imported','demo');
 
 create table social_accounts (
   id uuid primary key default gen_random_uuid(),
@@ -165,13 +190,16 @@ create table social_accounts (
   language text,                        -- BCP 47
   timezone text,
   owner_user_id uuid references profiles,
-  is_competitor boolean not null default false,
+  business_role business_role not null default 'owned',   -- why CANNA tracks it; set by the user
+  access_type profile_access_type not null default 'imported',  -- how Scopie gets data; set by trigger
   is_active boolean not null default true,
   connection_status account_connection_status not null default 'not_connected',
-  primary_data_source data_source not null default 'manual',
-  last_successful_sync_at timestamptz,
-  tracking_started_at timestamptz,      -- when Scopie first linked it to a connection
-  history_available_from date,          -- oldest post the backfill reached
+  last_successful_sync_at timestamptz,  -- last successful connected sync
+  last_sync_attempt_at timestamptz,     -- last run of any job
+  first_observed_at timestamptz,        -- first public observation, or when it was connected
+  last_observed_at timestamptz,         -- latest public observation
+  earliest_post_at timestamptz,         -- public backfill finished: every post since then is stored
+  history_available_from date,          -- oldest post the connected backfill reached
   connection_id uuid references platform_connections on delete set null,
   notes text, created_by uuid, created_at timestamptz, updated_at timestamptz,
   unique (id, organization_id),
@@ -179,11 +207,13 @@ create table social_accounts (
 );
 ```
 
-- **Connector status mirrors code.** `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`) is the source of truth for which platforms have a live connector; the migration sets `connector_status = 'available'` for exactly those (Instagram, Facebook) and `tests/integration/pipeline.test.ts` asserts the two match. There is no `demo` platform: demo data is a data source, not a platform.
+- **Data status mirrors code.** `lib/platforms/registry.ts` is the source of truth: `PUBLIC_DATA_PLATFORMS` (Instagram) has `public_data_status = 'available'`, `CONNECTED_PLATFORMS` (Instagram, Facebook) has `private_data_status = 'available'`. YouTube is `planned` for both; Facebook public data is `planned`; LinkedIn, TikTok, X and Discord are `not_available` for public data. An integration test asserts code and table match. There is no `demo` platform: demo data is a data source, not a platform.
+- **Business role and access type are separate.** `business_role` is what the user picks. `access_type` is always derived by the `social_accounts_derive_access` trigger on every insert and update: a demo organization → `demo`; a linked connection → `connected`; a platform with public data → `public`; otherwise `imported`. Users can't set it.
 - **Reporting timezone.** Instagram, Facebook and YouTube report daily values on Pacific time (`America/Los_Angeles`). For Meta, a daily value's report date is its `end_time` minus 12 hours (`metaReportDate()` in `lib/platforms/meta/shared.ts`), which lands inside the reported day in both PST and PDT.
 - **Account types** are validated per platform by the FK to `platform_account_types`, so an Instagram account can't be typed `page`.
-- **Protected fields.** A trigger stops users from setting `connection_status`, `primary_data_source`, `last_successful_sync_at`, `tracking_started_at`, `history_available_from`, `connection_id` and `created_by`. Once an account is connected, users also can't change its `external_id` or `platform_key`: its identity comes from the platform. An account becomes connected only through `link_connection_asset()` (§8.2).
-- Unique `(organization_id, platform_key, lower(handle))` and `(organization_id, platform_key, external_id)`, both partial (when not null). No delete policy: accounts are deactivated so history survives.
+- **Protected fields.** A trigger stops users from setting `connection_status`, `last_successful_sync_at`, `last_sync_attempt_at`, `first_observed_at`, `last_observed_at`, `earliest_post_at`, `history_available_from`, `connection_id` and `created_by`. Once an account is connected or observed, users also can't change its `external_id` or `platform_key`; once observed, not its `handle` either. Its identity comes from the platform. An account becomes connected only through `link_connection_asset()` (§8.2), and only if it is `owned`.
+- **Identity check.** The first public observation stores the platform's account id in `external_id`. Later observations compare it; if the handle now belongs to another account, the run fails with `profile_changed` and nothing is stored.
+- Unique `(organization_id, platform_key, lower(handle))` and `(organization_id, platform_key, external_id)`, both partial (when not null). No delete policy: accounts are deactivated so history survives, or removed with all their data through `remove_profile_and_data()`.
 
 Country is a column (every account has exactly one) **and** groups exist for regions and custom sets. "Country vs country" uses the column; "region vs region" uses groups.
 
@@ -233,6 +263,54 @@ create table connection_assets (        -- accounts the connection can see
 
 Members can read `platform_connections` and `connection_assets` (never tokens); only the service role writes them. Tokens are encrypted by `lib/crypto/tokens.ts` with `SCOPIE_ENCRYPTION_KEY`, which never touches the database; `key_version` allows key rotation. Instagram accounts use the token of the Page they are linked to, so only the user token and one token per Page are stored. See [API_INTEGRATIONS.md](API_INTEGRATIONS.md) §3.
 
+### 4.2 Profile snapshots
+
+```sql
+create table profile_snapshots (        -- append-only; a new row only when something changed
+  id bigint generated always as identity primary key,
+  organization_id uuid not null, social_account_id uuid not null,  -- FK → social_accounts, cascade
+  observed_at timestamptz not null,
+  data_source data_source not null,
+  username text, display_name text, biography text, website text,
+  profile_picture_url text, account_type text,
+  sync_run_id uuid references sync_runs on delete set null
+);
+```
+
+The daily public observation writes a row when the username, display name, bio or website changed, or
+when a profile picture appeared or disappeared (picture URLs are signed and change daily, so a new URL
+alone doesn't count). So the table stays small and shows when a profile was edited. Members read;
+only the service role writes.
+
+### 4.3 Viewer account and lookups
+
+```sql
+create table public_data_viewers (      -- the account public data is requested through
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations on delete cascade,
+  platform_key text not null references platforms,
+  connection_asset_id uuid not null references connection_assets on delete cascade,
+  created_by uuid references profiles on delete set null,
+  created_at timestamptz not null default now(),
+  unique (organization_id, platform_key)
+);
+
+create table public_profile_lookups (   -- service role only; counts add-profile previews
+  id bigint generated always as identity primary key,
+  organization_id uuid not null references organizations on delete cascade,
+  requested_by uuid references profiles on delete set null,
+  platform_key text not null references platforms,
+  looked_up_at timestamptz not null default now()
+);
+```
+
+- `public_data_viewers`: one viewer per organization and platform. Members read it; it is written only
+  through `set_public_data_viewer()` and `clear_public_data_viewer()` (§8.2). Changes go to the
+  activity log. Removing the connection asset removes the viewer.
+- `public_profile_lookups`: one row per add-profile preview, so an organization gets at most 30 an
+  hour (`LOOKUPS_PER_HOUR` in `lib/public-data/shared.ts`). Nothing about the looked-up profile is
+  kept. No user role can read or write it.
+
 ## 5. Universal social data model
 
 The rules below are enforced in the database, not only in `lib/ingest/ingest.ts` (the single write path for sync, CSV import and the demo generator), so a bug in one writer can't store bad data.
@@ -271,9 +349,9 @@ create table platform_metric_map (
 );
 ```
 
-23 metrics are seeded. `lib/metrics/registry.ts` mirrors both tables (`METRIC_DEFINITIONS`, `PLATFORM_METRIC_MAP`); an integration test asserts they match. Both are read-only for users. The full dictionary is in [METRICS.md](METRICS.md).
+26 metrics are seeded (Phase 3 added `following`, `posts_total` and the derived `public_engagement`). `lib/metrics/registry.ts` mirrors both tables (`METRIC_DEFINITIONS`, `PLATFORM_METRIC_MAP`); an integration test asserts they match. Both are read-only for users. The full dictionary is in [METRICS.md](METRICS.md).
 
-**Derived metrics are computed, never stored.** `follower_change`, `follower_growth_rate`, `posts_published` and the three engagement rates are `is_derived`; the snapshot trigger rejects them. Reach is `not_additive`: it can't be summed across days, posts or accounts.
+**Derived metrics are computed, never stored.** `follower_change`, `follower_growth_rate`, `posts_published`, `public_engagement` and the three engagement rates are `is_derived`; the snapshot trigger rejects them. Reach is `not_additive`: it can't be summed across days, posts or accounts.
 
 ### 5.2 Posts
 
@@ -304,6 +382,7 @@ create table posts (
   removed_at timestamptz,
   data_source data_source not null,
   import_batch_id uuid,
+  hashtags text[] not null default '{}',   -- from the caption, lower-cased; set by trigger
   first_fetched_at timestamptz, last_fetched_at timestamptz, last_metrics_at timestamptz,
   created_at timestamptz, updated_at timestamptz,
   unique (social_account_id, external_id),
@@ -327,7 +406,9 @@ create table post_audiences (           -- many-to-many: a post can target sever
 - Posts store their **own** country and language, so moving an account to another market later doesn't rewrite history. The trigger fills them from the account when not given (`language_source = 'account_default'`).
 - `media_format` (what the platform says it is) is separate from `content_format_id` (the team's editorial format, e.g. "Product demo").
 - Pillar, campaign, CTA, content format and audiences are real FK columns (composite with `organization_id`), each with a `*_source` saying who set it.
-- **Users may only tag posts** (`content.edit`, EDITOR+). On update, the trigger keeps every platform field (caption, dates, format, source…) and sets the changed tag's source to `manual`. Users can insert posts only as `imported` or `manual`, and can't delete posts.
+- **Users may only tag posts** (`content.edit`, EDITOR+). On update, the trigger keeps every platform field (caption, dates, format, source…) and sets the changed tag's source to `manual`. Users can insert posts only as `imported`, and can't delete posts (except through `remove_profile_and_data()`).
+- **Hashtags** are extracted from the caption by the trigger (`extract_hashtags()`), so they always match it. A GIN index supports hashtag queries.
+- `first_fetched_at` is when Scopie first saw the post; it never changes. A post found by a backfill was already old when found.
 
 ### 5.3 Minimal content taxonomy
 
@@ -336,7 +417,8 @@ create table post_audiences (           -- many-to-many: a post can target sever
 ### 5.4 Metric snapshots (append-only facts)
 
 ```sql
-create type metric_availability as enum ('available','not_permitted','not_applicable','pending','error');
+create type metric_availability as enum
+  ('available','not_permitted','not_applicable','pending','error','hidden_by_owner','not_public');
 create type metric_period       as enum ('lifetime','day');
 
 create table post_metric_snapshots (
@@ -380,42 +462,46 @@ Why snapshots: post metrics keep growing for days after publishing. Capturing at
 
 ### 5.5 Data source rules
 
-Every post and snapshot carries `data_source` (UI labels: `authenticated` → **Live**, `public` → **Public**, `imported` → **Imported**, `manual` → **Manual**, `demo` → **DEMO**). `check_fact_source()`, called from the post and snapshot triggers, enforces:
+Every post, snapshot and profile snapshot carries `data_source` (UI labels: `live_public` → **PUBLIC**, `live_connected` → **CONNECTED**, `imported` → **IMPORTED**, `estimated` → **ESTIMATED**, `demo` → **DEMO**). `check_fact_source()`, called from the post and snapshot triggers, enforces:
 
 | Rule                                                                       | Error   |
 | -------------------------------------------------------------------------- | ------- |
 | `demo` only in organizations with `is_demo = true`                         | `42501` |
-| `authenticated` only for accounts with a `connection_id`                   | `42501` |
+| A demo organization holds only `demo` or `imported` data                   | `42501` |
+| `live_connected` only for accounts with a `connection_id`                  | `42501` |
+| `live_public` only on a platform with `public_data_status = 'available'`   | `42501` |
 | `imported` requires an `import_batch_id`                                   | `23514` |
-| Users (not the service role) may write only `imported` or `manual`         | `42501` |
+| Users (not the service role) may write only `imported`                     | `42501` |
 | Value present ⇔ `availability = 'available'` (check constraint, snapshots) | `23514` |
 
-So signed-in users can never write `authenticated` (Live) data; only the sync worker can. Nothing writes `public` yet (no public-data connector exists).
+So signed-in users can never write PUBLIC or CONNECTED data; only the sync worker can. Nothing writes `estimated` yet. A post first stored from an import keeps its row when an API later returns it; the source rules are checked again when its `data_source` changes.
 
 ### 5.6 Comparability
 
 Each mapped metric has a `comparability_class`. Two values may be compared or summed only if their classes match. Classes in use:
 
-| Class                                                       | Includes                                                                          |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `audience_size`                                             | Instagram `followers_count`, Facebook Page `followers_count`                      |
-| `meta_reach`                                                | Instagram `reach`, Facebook `page_impressions_unique` / `post_impressions_unique` |
-| `meta_views`                                                | Instagram `views` (account and post)                                              |
-| `meta_interactions`                                         | Instagram `total_interactions`                                                    |
-| `likes`, `comments`, `shares`                               | Instagram likes/comments/shares; Facebook comments/shares                         |
-| Platform-specific (`ig_*`, `fb_*`, `meta_followers_gained`) | Comparable only within that platform                                              |
+| Class                                                       | Includes                                                                                                       |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `audience_size`                                             | Instagram `followers_count` (insights and Business Discovery), Facebook Page `followers_count`                 |
+| `posts_total`                                               | Instagram `media_count` (Business Discovery)                                                                   |
+| `ig_public_reel_views`                                      | Instagram `view_count` (Business Discovery). Reels only, includes paid views; never compared with `meta_views` |
+| `meta_reach`                                                | Instagram `reach`, Facebook `page_impressions_unique` / `post_impressions_unique`                              |
+| `meta_views`                                                | Instagram `views` (account and post)                                                                           |
+| `meta_interactions`                                         | Instagram `total_interactions`                                                                                 |
+| `likes`, `comments`, `shares`                               | Instagram likes/comments/shares (insights and Business Discovery); Facebook comments/shares                    |
+| Platform-specific (`ig_*`, `fb_*`, `meta_followers_gained`) | Comparable only within that platform                                                                           |
 
-A metric with no mapping (e.g. imported LinkedIn numbers) gets the class `<platform>:<metric>`, so it is only comparable within its own platform (`comparabilityClass()` in `lib/metrics/registry.ts`). The analytics layer that applies these checks arrives in Phase 3; see [METRICS.md](METRICS.md).
+A metric with no mapping (e.g. imported LinkedIn numbers) gets the class `<platform>:<metric>`, so it is only comparable within its own platform (`comparabilityClass()` in `lib/metrics/registry.ts`). The analytics layer (`lib/analytics`) compares two values only when they share metric key, comparability class and data source; see [METRICS.md](METRICS.md).
 
 ### 5.7 Read models
 
-Views (`security_invoker`, so RLS applies) over the snapshot tables. At scale they become incrementally refreshed tables (§9).
+Views (`security_invoker`, so RLS applies) over the snapshot tables. Each returns one row per data source and exposes `data_source`, so public and connected values never mix. At scale they become incrementally refreshed tables (§9).
 
 | View                    | Returns                                                                                                                                                                      |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `post_metrics_latest`   | Latest lifetime value of each metric per post.                                                                                                                               |
+| `post_metrics_latest`   | Latest lifetime value of each metric per post and data source.                                                                                                               |
 | `post_metrics_at_age`   | Value of each lifetime metric at post ages 1, 2, 3, 7, 14, 30, 90 days: the snapshot nearest the target age within ±15% (at least ±6 h). No snapshot in the window = no row. |
-| `account_metrics_daily` | Latest captured value per account, metric, period and date (platforms revise recent days).                                                                                   |
+| `account_metrics_daily` | Latest captured value per account, metric, period, data source and date (platforms revise recent days).                                                                      |
 
 ### 5.8 Imports
 
@@ -549,7 +635,8 @@ create table strategy_competitors(strategy_id uuid, social_account_id uuid);
 ### 8.1 Sync bookkeeping (implemented)
 
 ```sql
-create type sync_job_type as enum ('account_daily','posts_incremental','post_metrics_refresh','backfill');
+create type sync_job_type as enum ('account_daily','posts_incremental','post_metrics_refresh','backfill',
+  'public_profile_daily','public_posts_refresh','public_backfill');
 create type sync_status   as enum ('queued','running','succeeded','partial','failed','cancelled');
 create type sync_trigger  as enum ('schedule','manual','retry');
 
@@ -557,7 +644,7 @@ create table sync_state (               -- one row per account and job type
   social_account_id uuid references social_accounts on delete cascade,
   organization_id uuid not null,
   job_type sync_job_type not null,
-  cursor jsonb,                         -- e.g. backfill position {after}
+  cursor jsonb,                         -- e.g. backfill position {after} or {after, pages}
   last_success_at timestamptz, last_attempt_at timestamptz,
   next_run_after timestamptz,           -- backoff or rate-limit pause
   consecutive_failures int not null default 0,
@@ -590,12 +677,15 @@ Members can read `sync_state`, `sync_runs` and `sync_run_events`; only the servi
 
 `security definer`, permission-checked inside (`accounts.manage`), granted to `authenticated`:
 
-| Function                                      | Does                                                                                                                                                                                                                                         |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `link_connection_asset(asset_id, account_id)` | The only way an account becomes connected. Requires an active connection, matching platform, not a competitor, and the asset not linked elsewhere. Sets `connection_id`, `external_id`, `connected`, `authenticated`, `tracking_started_at`. |
-| `unlink_social_account(account_id)`           | Unlinks the account, sets `not_connected`, cancels its queued runs. Synced data stays, labelled with its original source.                                                                                                                    |
-| `disconnect_platform_connection(target)`      | Deletes the connection's tokens, marks it `revoked`, unlinks its accounts and cancels their queued runs. The app revokes the grant at Meta first (best effort).                                                                              |
-| `request_sync(account_id, job)`               | Queues a manual run for an active, connected account (default `posts_incremental`); returns the existing run if one is already queued or running.                                                                                            |
+| Function                                      | Does                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `link_connection_asset(asset_id, account_id)` | The only way an account becomes connected. Requires an active connection, matching platform, `business_role = owned`, and the asset not linked elsewhere. Sets `connection_id`, `external_id`, `connected` and `first_observed_at` (if not set yet).                                            |
+| `unlink_social_account(account_id)`           | Unlinks the account, sets `not_connected`, cancels its queued runs. Synced data stays, labelled with its original source.                                                                                                                                                                       |
+| `disconnect_platform_connection(target)`      | Deletes the connection's tokens, marks it `revoked`, unlinks its accounts and cancels their queued runs. The app revokes the grant at Meta first (best effort).                                                                                                                                 |
+| `request_sync(account_id, job)`               | Queues a manual run for an active account; returns the existing run if one is already queued or running. Without `job`: `public_profile_daily` on a platform with public data, else `posts_incremental`. Public jobs need public data and a non-demo profile; connected jobs need a connection. |
+| `set_public_data_viewer(asset_id)`            | Chooses the organization's viewer account. The asset must be an Instagram account on an active connection of the caller's organization. Replaces any earlier viewer.                                                                                                                            |
+| `clear_public_data_viewer(platform, org)`     | Removes the viewer. Public jobs stop being queued for that organization.                                                                                                                                                                                                                        |
+| `remove_profile_and_data(account_id)`         | Deletes a profile and everything stored about it: posts, post and account snapshots, profile snapshots, import batches, sync runs and their raw payloads. Unlinks any connection asset first. The activity log keeps only the fact that it was removed (Meta Platform Terms §3.d).              |
 
 ### 8.3 Planned tables
 
@@ -641,16 +731,17 @@ In place:
 - `posts (organization_id, published_at desc)`, `(social_account_id, published_at desc)`, `(organization_id, country_code, published_at desc)`, `(organization_id, platform_key, published_at desc)`; partial indexes on `pillar_id` and `campaign_id`.
 - Snapshots: the duplicate-guard unique indexes, `(organization_id, captured_at)` / `(organization_id, metric_date)`, and BRIN on `captured_at` (cheap, fits append-only). `raw_payloads` BRIN on `captured_at`.
 - `sync_runs`: partial index on queued runs by `queued_at`, plus per account and per org.
+- `social_accounts (organization_id, business_role)`; `posts` GIN on `hashtags`; `profile_snapshots (social_account_id, observed_at desc)`; `public_profile_lookups (organization_id, looked_up_at desc)`.
 - Every RLS policy column (`organization_id`) indexed.
 
 Later:
 
-- Turn the read-model views (§5.7) into incrementally refreshed tables when they get slow, and add daily account rollups for the dashboard (Phase 3).
+- Turn the read-model views (§5.7) into incrementally refreshed tables when they get slow, and add daily account rollups for the dashboard.
 - Convert snapshot tables to monthly range partitions when > ~50M rows (no schema change needed).
 - `content_items (organization_id, status, planned_publish_at)` for calendar and queue (Phase 5).
 
 ## 10. Seed data
 
-`pnpm db:seed` (`scripts/seed-demo.ts`, local Supabase only unless `--allow-remote`) creates a demo user and team, an org "CANNA (DEMO)" with `is_demo = true`, fictional accounts for six markets across Instagram, Facebook, LinkedIn, YouTube, TikTok and X, and two fictional competitors. Accounts get `connection_status = 'demo'`, `primary_data_source = 'demo'` and names ending in "(DEMO)".
+`pnpm db:seed` (`scripts/seed-demo.ts`, local Supabase only unless `--allow-remote`) creates a demo user and team, an org "CANNA (DEMO)" with `is_demo = true`, fictional own accounts (`business_role = owned`) for six markets across Instagram, Facebook, LinkedIn, YouTube, TikTok and X, and five fictional public Instagram profiles: three competitors, an industry account and a creator. Accounts get `connection_status = 'demo'`, `access_type = 'demo'` (from the trigger) and names ending in "(DEMO)".
 
-For the org's own active accounts, `lib/demo/generate.ts` produces 60 days of deterministic daily account metrics and a few posts a week, each measured at 1, 7 and 30 days old. They are written through the same ingest step as real data with `data_source = 'demo'`, which the database accepts only because the org is a demo org. Re-running updates instead of duplicating.
+For every active profile, `lib/demo/generate.ts` produces deterministic DEMO posts and metrics, each post measured at 1, 7 and 30 days old. Own profiles get 60 days of daily account metrics and post insights. Public profiles get only what Business Discovery would give: one follower observation a day, likes (hidden on some profiles), comments and Reel views, plus `first_observed_at`, `last_observed_at`, `earliest_post_at` and two DEMO profile snapshots. Everything is written through the same ingest step as real data with `data_source = 'demo'`, which the database accepts only because the org is a demo org. Re-running updates instead of duplicating.

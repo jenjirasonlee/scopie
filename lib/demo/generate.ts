@@ -21,12 +21,26 @@ export type DemoCapture = {
 export type DemoAccountData = {
   accountMetrics: NormalizedAccountMetric[];
   accountCapturedAt: string;
+  /** Public profiles: one follower observation per day, each with its own capture time. */
+  observations: { capturedAt: string; metrics: NormalizedAccountMetric[] }[];
   captures: DemoCapture[];
+  earliestPostAt: string | null;
 };
+
+/**
+ * 'connected' mimics an owner-authorized account (insights such as reach and saves).
+ * 'public' mimics a competitor read through Business Discovery: followers, likes (sometimes
+ * hidden by the owner), comments and Reel views only. Private metrics are never generated
+ * for public profiles, not even as DEMO DATA.
+ */
+export type DemoMode = 'connected' | 'public';
 
 const DAY = 86_400_000;
 /** Snapshots taken at these post ages, like the real sync schedule. */
 const DEMO_SNAPSHOT_DAYS = [1, 7, 30];
+
+/** Generic gardening hashtags so hashtag views have something to show. */
+const DEMO_TAGS = ['#demo', '#hydroponics', '#growtips', '#coco', '#nutrients', '#indoorgarden'];
 
 const FORMATS: Record<string, MediaFormat[]> = {
   instagram: ['image', 'carousel', 'short_video', 'story'],
@@ -68,7 +82,9 @@ export function generateDemoAccount(input: {
   platformKey: string;
   now: Date;
   days?: number;
+  mode?: DemoMode;
 }): DemoAccountData {
+  const mode = input.mode ?? 'connected';
   const random = mulberry32(hash(input.seed));
   const days = input.days ?? 60;
   const today = Math.floor(input.now.getTime() / DAY) * DAY;
@@ -77,6 +93,7 @@ export function generateDemoAccount(input: {
   // Account metrics: one row per day, ending yesterday (today isn't finished).
   let followers = between(2_000, 40_000);
   const accountMetrics: NormalizedAccountMetric[] = [];
+  const observations: DemoAccountData['observations'] = [];
   for (let offset = days; offset >= 1; offset--) {
     const date = new Date(today - offset * DAY).toISOString().slice(0, 10);
     const gained = between(0, Math.max(5, followers / 400));
@@ -91,6 +108,14 @@ export function generateDemoAccount(input: {
       period: 'day',
       metricDate: date,
     });
+    if (mode === 'public') {
+      // Observed at 06:00 each day; the value is the running total at that moment.
+      observations.push({
+        capturedAt: `${date}T06:00:00.000Z`,
+        metrics: [{ ...day('followers', followers), period: 'lifetime' }],
+      });
+      continue;
+    }
     accountMetrics.push(
       { ...day('followers', followers), period: 'lifetime' },
       day('followers_gained', gained),
@@ -105,6 +130,9 @@ export function generateDemoAccount(input: {
   const captures = new Map<number, DemoCapture>();
   let time = today - days * DAY;
   let number = 0;
+  let earliestPostAt: string | null = null;
+  // Public profiles: a few owners hide like counts, as on Instagram.
+  const hidesLikes = mode === 'public' && random() < 0.25;
   while (true) {
     time += between(1, 4) * DAY + between(7, 19) * 3_600_000 - 12 * 3_600_000;
     if (time >= input.now.getTime() - DAY) break;
@@ -114,10 +142,11 @@ export function generateDemoAccount(input: {
       externalId: `demo_${input.seed}_${number}`,
       publishedAt: new Date(time).toISOString(),
       permalink: null,
-      caption: `DEMO post ${number}. Fictional content for testing, not a real CANNA post.`,
+      caption: `DEMO post ${number}. Fictional content for testing, not a real CANNA post. ${DEMO_TAGS[between(0, DEMO_TAGS.length - 1)]} ${DEMO_TAGS[between(0, DEMO_TAGS.length - 1)]}`,
       mediaFormat: format,
       nativeType: 'DEMO',
     };
+    earliestPostAt ??= post.publishedAt;
     const finalReach =
       between(followers * 0.08, followers * 0.6) * (format === 'short_video' ? 2 : 1);
     for (const age of DEMO_SNAPSHOT_DAYS) {
@@ -142,6 +171,20 @@ export function generateDemoAccount(input: {
       };
       captures.set(at, capture);
       capture.posts.push(post);
+      if (mode === 'public') {
+        const unavailable = (
+          metricKey: string,
+          availability: 'hidden_by_owner' | 'not_applicable',
+        ): NormalizedPostMetric => ({ ...metric(metricKey, 0), value: null, availability });
+        capture.metrics.push(
+          hidesLikes ? unavailable('likes', 'hidden_by_owner') : metric('likes', likes),
+          metric('comments', Math.round(likes * (0.02 + random() * 0.08))),
+          format === 'short_video'
+            ? metric('views', Math.round(reach * (1.3 + random())))
+            : unavailable('views', 'not_applicable'),
+        );
+        continue;
+      }
       capture.metrics.push(
         metric('reach', reach),
         metric('views', Math.round(reach * (1.3 + random()))),
@@ -156,6 +199,8 @@ export function generateDemoAccount(input: {
   return {
     accountMetrics,
     accountCapturedAt: new Date(today).toISOString(),
+    observations,
+    earliestPostAt,
     captures: [...captures.values()].sort((a, b) => a.capturedAt.localeCompare(b.capturedAt)),
   };
 }

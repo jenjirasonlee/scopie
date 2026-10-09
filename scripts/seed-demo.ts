@@ -82,13 +82,48 @@ const PLATFORMS_BY_MARKET: Record<string, { platform: string; type: string }[]> 
   ],
 };
 
-const COMPETITORS = [
-  { name: 'Hydro Rival (DEMO)', handle: 'hydrorival_demo', platform: 'instagram', country: 'NL' },
+/** Fictional public profiles CANNA watches. Every name says DEMO. */
+const COMPETITORS: {
+  name: string;
+  handle: string;
+  platform: string;
+  country: string;
+  role: 'competitor' | 'industry' | 'influencer';
+}[] = [
+  {
+    name: 'Hydro Rival (DEMO)',
+    handle: 'hydrorival_demo',
+    platform: 'instagram',
+    country: 'NL',
+    role: 'competitor',
+  },
   {
     name: 'GrowCo Example (DEMO)',
     handle: 'growco_example_demo',
     platform: 'instagram',
     country: 'DE',
+    role: 'competitor',
+  },
+  {
+    name: 'Nutrient Labs (DEMO)',
+    handle: 'nutrientlabs_demo',
+    platform: 'instagram',
+    country: 'ES',
+    role: 'competitor',
+  },
+  {
+    name: 'Garden Trade Weekly (DEMO)',
+    handle: 'gardentrade_demo',
+    platform: 'instagram',
+    country: 'GB',
+    role: 'industry',
+  },
+  {
+    name: 'Green Thumb Creator (DEMO)',
+    handle: 'greenthumb_creator_demo',
+    platform: 'instagram',
+    country: 'US',
+    role: 'influencer',
   },
 ];
 
@@ -172,7 +207,7 @@ async function main() {
         timezone: market.timezone,
         owner_user_id: ownerId,
         connection_status: 'demo',
-        primary_data_source: 'demo',
+        business_role: 'owned',
         notes: 'DEMO DATA. Fictional account for local development.',
       });
     }
@@ -185,9 +220,8 @@ async function main() {
       handle: competitor.handle,
       account_type: 'business',
       country_code: competitor.country,
-      is_competitor: true,
+      business_role: competitor.role,
       connection_status: 'demo',
-      primary_data_source: 'demo',
       notes: 'DEMO DATA. Fictional competitor for local development.',
     });
   }
@@ -202,7 +236,6 @@ async function main() {
     language: 'en',
     is_active: false,
     connection_status: 'demo',
-    primary_data_source: 'demo',
     notes: 'DEMO DATA. Inactive example account.',
   });
 
@@ -222,22 +255,25 @@ async function main() {
     if (!existing) created++;
   }
 
-  // DEMO posts and metrics for the organization's own active accounts.
+  // DEMO posts and metrics for every active demo profile, own and competitor alike.
   const { data: ownAccounts, error: ownError } = await supabase
     .from('social_accounts')
-    .select('id, platform_key, handle')
+    .select('id, platform_key, handle, display_name, business_role')
     .eq('organization_id', org.id)
-    .eq('is_competitor', false)
     .eq('is_active', true);
   if (ownError) throw ownError;
   const now = new Date();
   let posts = 0;
   let facts = 0;
   for (const account of ownAccounts) {
+    // Competitors, industry accounts and creators are public profiles: public metrics only.
+    const isPublic = account.business_role !== 'owned';
     const demo = generateDemoAccount({
-      seed: account.handle ?? account.id,
+      // Each market uses one handle on several platforms; the platform keeps their numbers apart.
+      seed: `${account.handle ?? account.id}:${account.platform_key}`,
       platformKey: account.platform_key,
       now,
+      mode: isPublic ? 'public' : 'connected',
     });
     const base = {
       organizationId: org.id,
@@ -251,6 +287,56 @@ async function main() {
       'sync',
     );
     facts += daily.accountMetricsWritten;
+    for (const observation of demo.observations) {
+      const result = await ingest(
+        supabase,
+        { ...base, capturedAt: observation.capturedAt, accountMetrics: observation.metrics },
+        'sync',
+      );
+      facts += result.accountMetricsWritten;
+    }
+    const firstObservation = demo.observations[0]?.capturedAt ?? demo.accountCapturedAt;
+    const { error: observedError } = await supabase
+      .from('social_accounts')
+      .update({
+        first_observed_at: isPublic ? firstObservation : null,
+        last_observed_at: isPublic ? (demo.observations.at(-1)?.capturedAt ?? null) : null,
+        earliest_post_at: demo.earliestPostAt,
+      })
+      .eq('id', account.id);
+    if (observedError) throw observedError;
+    if (isPublic) {
+      // Two DEMO profile versions, so profile changes can be shown.
+      await supabase.from('profile_snapshots').delete().eq('social_account_id', account.id);
+      const middle = demo.observations[Math.floor(demo.observations.length / 2)]?.capturedAt;
+      const { error: snapshotError } = await supabase.from('profile_snapshots').insert([
+        {
+          organization_id: org.id,
+          social_account_id: account.id,
+          observed_at: firstObservation,
+          data_source: 'demo',
+          username: account.handle,
+          display_name: account.display_name,
+          biography: 'DEMO DATA. Fictional profile for local development.',
+          website: 'https://example.com/',
+        },
+        ...(middle
+          ? [
+              {
+                organization_id: org.id,
+                social_account_id: account.id,
+                observed_at: middle,
+                data_source: 'demo' as const,
+                username: account.handle,
+                display_name: account.display_name,
+                biography: 'DEMO DATA. Fictional profile, new autumn range bio.',
+                website: 'https://example.com/autumn',
+              },
+            ]
+          : []),
+      ]);
+      if (snapshotError) throw snapshotError;
+    }
     const seenPosts = new Set<string>();
     for (const capture of demo.captures) {
       const result = await ingest(

@@ -8,6 +8,7 @@ const SECTIONS = [
   { segment: 'profile', label: 'Profile' },
   { segment: 'organization', label: 'Organization' },
   { segment: 'members', label: 'Members & roles' },
+  { segment: 'public-data', label: 'Public data' },
   { segment: 'connections', label: 'Connections' },
 ];
 

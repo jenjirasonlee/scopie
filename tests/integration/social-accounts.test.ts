@@ -37,7 +37,8 @@ describe('social accounts', () => {
         language: 'de',
         // A user trying to fake a live connection:
         connection_status: 'connected',
-        primary_data_source: 'authenticated',
+        access_type: 'connected',
+        first_observed_at: new Date().toISOString(),
         last_successful_sync_at: new Date().toISOString(),
       })
       .select()
@@ -45,7 +46,10 @@ describe('social accounts', () => {
     expect(error).toBeNull();
     expect(data).toMatchObject({
       connection_status: 'not_connected',
-      primary_data_source: 'manual',
+      // Instagram has public data, so a profile without a connection is a public profile.
+      access_type: 'public',
+      business_role: 'owned',
+      first_observed_at: null,
       last_successful_sync_at: null,
       is_active: true,
       created_by: admin.id,
@@ -64,14 +68,12 @@ describe('social accounts', () => {
       .single();
     const { data } = await admin.client
       .from('social_accounts')
-      .update({ connection_status: 'connected', primary_data_source: 'authenticated' })
+      .update({ connection_status: 'connected', access_type: 'connected' })
       .eq('id', account!.id)
       .select()
       .single();
-    expect(data).toMatchObject({
-      connection_status: 'not_connected',
-      primary_data_source: 'manual',
-    });
+    // Facebook public data isn't built yet, so an unconnected Page holds imported data.
+    expect(data).toMatchObject({ connection_status: 'not_connected', access_type: 'imported' });
   });
 
   it('allows trusted server code (service role) to set connection status', async () => {
@@ -82,11 +84,10 @@ describe('social accounts', () => {
         platform_key: 'youtube',
         display_name: 'Demo channel',
         connection_status: 'demo',
-        primary_data_source: 'demo',
       })
       .select()
       .single();
-    expect(data).toMatchObject({ connection_status: 'demo', primary_data_source: 'demo' });
+    expect(data).toMatchObject({ connection_status: 'demo' });
   });
 
   it('rejects the same handle twice on one platform (case-insensitive)', async () => {

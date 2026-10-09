@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/db/types';
-import { createAdapter } from '@/lib/platforms/registry';
+import { createAdapter, createPublicCollector } from '@/lib/platforms/registry';
 import { metaConfig, parseServerEnv } from '@/lib/server-env';
-import { loadAccountContext } from './credentials';
+import { loadAccountContext, loadPublicContext } from './credentials';
 import type { EngineDeps } from './engine';
 import { enqueueDueJobs, failStaleRuns, processQueue, pruneRawPayloads } from './scheduler';
 
@@ -30,6 +30,10 @@ export function workerDepsFromEnv(
     adapterFor: (platformKey) =>
       createAdapter(platformKey, { version: meta?.version, appSecret: meta?.appSecret }),
     contextFor: (account) => loadAccountContext(db, account, encryptionKey),
+    collectorFor: (platformKey) =>
+      createPublicCollector(platformKey, { version: meta?.version, appSecret: meta?.appSecret }),
+    publicContextFor: (organizationId, platformKey) =>
+      loadPublicContext(db, organizationId, platformKey, encryptionKey),
   };
 }
 

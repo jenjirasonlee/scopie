@@ -9,7 +9,7 @@ import type {
   NormalizedAccountMetric,
   NormalizedPost,
   NormalizedPostMetric,
-  PlatformAdapter,
+  PrivateDataAdapter,
   PostMetricsResult,
   PostPage,
   RawPayload,
@@ -85,7 +85,7 @@ function isMetricLevelError(error: unknown): boolean {
   );
 }
 
-export class InstagramAdapter implements PlatformAdapter {
+export class InstagramAdapter implements PrivateDataAdapter {
   readonly platformKey = PLATFORM;
   private readonly graph: GraphClient;
   private raw: RawPayload[] = [];

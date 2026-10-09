@@ -31,21 +31,21 @@ describe('account summary', () => {
         platform_key: 'instagram',
         is_active: true,
         connection_status: 'not_connected',
-        primary_data_source: 'manual',
+        access_type: 'imported',
       },
       {
         country_code: 'DE',
         platform_key: 'facebook',
         is_active: false,
         connection_status: 'not_connected',
-        primary_data_source: 'manual',
+        access_type: 'imported',
       },
       {
         country_code: 'ES',
         platform_key: 'instagram',
         is_active: true,
         connection_status: 'demo',
-        primary_data_source: 'demo',
+        access_type: 'demo',
       },
     ]);
     expect(summary).toMatchObject({ total: 3, active: 2, inactive: 1, demoCount: 1 });

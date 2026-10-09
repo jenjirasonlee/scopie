@@ -1,0 +1,47 @@
+{
+  "business_discovery": {
+    "id": "17841400000000001",
+    "username": "example_competitor",
+    "name": "Example Competitor (fixture)",
+    "biography": "Fixture profile for tests. Not a real account.",
+    "website": "https://example.com/",
+    "profile_picture_url": "https://scontent.example.com/fixture.jpg",
+    "followers_count": 20400,
+    "media_count": 812,
+    "media": {
+      "data": [
+        {
+          "id": "18000000000000001",
+          "caption": "New nutrient line is here #hydroponics #growtips",
+          "media_type": "VIDEO",
+          "media_product_type": "REELS",
+          "permalink": "https://www.instagram.com/reel/FIXTURE1/",
+          "timestamp": "2026-10-05T09:00:00+0000",
+          "like_count": 310,
+          "comments_count": 14,
+          "view_count": 9100
+        },
+        {
+          "id": "18000000000000002",
+          "caption": "Tips for coco growers #coco",
+          "media_type": "CAROUSEL_ALBUM",
+          "media_product_type": "FEED",
+          "permalink": "https://www.instagram.com/p/FIXTURE2/",
+          "timestamp": "2026-10-02T15:30:00+0000",
+          "comments_count": 6
+        },
+        {
+          "id": "18000000000000003",
+          "media_type": "IMAGE",
+          "media_product_type": "FEED",
+          "permalink": "https://www.instagram.com/p/FIXTURE3/",
+          "timestamp": "2026-09-28T08:00:00+0000",
+          "like_count": 0,
+          "comments_count": 0
+        }
+      ],
+      "paging": { "cursors": { "after": "QVFIUFIXTURE" } }
+    }
+  },
+  "id": "17841400000000999"
+}

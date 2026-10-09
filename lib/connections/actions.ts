@@ -105,8 +105,11 @@ export async function requestSync(
   const { role } = await getOrgContext(orgSlug);
   if (!can(role, 'accounts.manage')) return NO_PERMISSION;
   const supabase = await createClient();
+  const job = field(formData, 'job');
   const { data, error } = await supabase.rpc('request_sync', {
     account_id: field(formData, 'accountId'),
+    // Connected profiles sync their owner data; public profiles default to an observation.
+    ...(job === 'posts_incremental' || job === 'public_profile_daily' ? { job } : {}),
   });
   if (error) return { status: 'error', message: 'Could not queue a sync for this account.' };
   revalidatePath(`/${orgSlug}/accounts/${field(formData, 'accountId')}`);

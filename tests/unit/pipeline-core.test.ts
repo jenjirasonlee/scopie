@@ -131,6 +131,26 @@ describe('DEMO data generator', () => {
   const now = new Date('2026-10-01T10:00:00Z');
   const demo = generateDemoAccount({ seed: 'canna_nl_demo', platformKey: 'instagram', now });
 
+  it('generates only public metrics for public profiles, with gaps never zero', () => {
+    const competitor = generateDemoAccount({
+      seed: 'hydrorival_demo',
+      platformKey: 'instagram',
+      now,
+      mode: 'public',
+    });
+    const keys = new Set(
+      competitor.captures.flatMap((capture) => capture.metrics.map((metric) => metric.metricKey)),
+    );
+    expect([...keys].sort()).toEqual(['comments', 'likes', 'views']);
+    expect(competitor.accountMetrics).toEqual([]);
+    expect(competitor.observations).toHaveLength(60);
+    for (const capture of competitor.captures) {
+      for (const metric of capture.metrics) {
+        expect(metric.availability === 'available').toBe(metric.value !== null);
+      }
+    }
+  });
+
   it('is deterministic', () => {
     expect(generateDemoAccount({ seed: 'canna_nl_demo', platformKey: 'instagram', now })).toEqual(
       demo,

@@ -59,16 +59,15 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
 
   await expect(page).toHaveURL(new RegExp(`/${slug}/dashboard$`));
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-  await expect(
-    page.getByText('Performance analytics aren’t available yet'.replace('’', "'")),
-  ).toBeVisible();
+  // A new organization gets an honest empty state, not demo charts.
+  await expect(page.getByText('No profiles to monitor yet')).toBeVisible();
 
   // Empty state, then a validation error that keeps what was typed.
   await page.getByRole('link', { name: 'Accounts', exact: true }).click();
   await expect(page.getByText('No social accounts yet.')).toBeVisible();
   await page.getByRole('link', { name: 'Add your first account' }).click();
   await page.locator('#handle:visible').fill('@canna_de_e2e');
-  await page.getByRole('button', { name: 'Add account' }).click();
+  await page.getByRole('button', { name: 'Add profile' }).click();
   await expect(page.locator('#platformKey-error:visible')).toHaveText('Choose a platform');
   await expect(page.locator('#handle:visible')).toHaveValue('@canna_de_e2e');
 
@@ -76,14 +75,15 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
   await page.locator('#displayName:visible').fill('CANNA Germany E2E');
   await page.locator('#countryCode:visible').selectOption('DE');
   await page.locator('#language:visible').fill('de');
-  await page.getByRole('button', { name: 'Add account' }).click();
+  await page.getByRole('button', { name: 'Add profile' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/${slug}/accounts\\?created=1`));
   const row = page.getByRole('row', { name: /CANNA Germany E2E/ });
   await expect(row).toContainText('@canna_de_e2e');
   await expect(row).toContainText('Germany');
-  await expect(row).toContainText('Not connected');
-  await expect(row).toContainText('Never');
+  // An unconnected Instagram profile is read as a public profile.
+  await expect(row).toContainText('PUBLIC');
+  await expect(row).toContainText('Not yet');
 
   // Edit: change the country.
   await row.getByRole('link', { name: 'Edit' }).click();
@@ -139,11 +139,11 @@ test('viewers get a read-only accounts page', async ({ page }) => {
   await page.goto(`/${org.slug}/accounts`);
   await expect(page.getByRole('row', { name: /Visible account/ })).toBeVisible();
   await expect(page.getByText('You have read-only access to accounts.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Add account' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add profile' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Deactivate' })).toHaveCount(0);
 
   await page.goto(`/${org.slug}/accounts/new`);
-  await expect(page.getByText('Only owners and admins can add social accounts.')).toBeVisible();
+  await expect(page.getByText('Only owners and admins can add profiles.')).toBeVisible();
 });
 
 test('members of one organization get a 404 for another', async ({ page }) => {
@@ -214,4 +214,109 @@ test('connections page explains what is missing instead of offering a broken but
   // The test environment has no Meta app configured.
   await expect(page.getByText(/isn.t set up on this server yet/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Connect with Meta' })).toHaveCount(0);
+});
+
+test('public profiles: viewer setup explained, bulk add, observed history, remove with data', async ({
+  page,
+}) => {
+  const user = await createUser('e2e-public');
+  const org = await createOrg(user, 'Public Data Org');
+  await signIn(page, user.email);
+
+  await page.goto(`/${org.slug}/settings/public-data`);
+  await expect(page.getByText('viewer account').first()).toBeVisible();
+  await expect(page.getByText(/No Instagram professional account is connected yet/)).toBeVisible();
+
+  // Without a viewer, profiles can be added but previews are off.
+  await page.goto(`/${org.slug}/accounts/new`);
+  await expect(page.getByRole('link', { name: 'choose a viewer account' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0);
+  await page.locator('#bulk-handles:visible').fill('rival_one_e2e,NL\n@rival_two_e2e\nnot valid!');
+  await page.getByRole('button', { name: 'Add all' }).click();
+  await expect(page.getByText(/Added 2 profiles, skipped 1/)).toBeVisible();
+  await expect(page.getByText('not valid!: not a valid username')).toBeVisible();
+
+  await page.goto(`/${org.slug}/accounts`);
+  const row = page.getByRole('row', { name: /rival_one_e2e/ });
+  await expect(row).toContainText('Competitor');
+  await expect(row).toContainText('PUBLIC');
+  await expect(row).toContainText('Netherlands');
+
+  // Store two observations as the sync would, then check what the profile page shows.
+  const admin = adminClient();
+  const { data: account } = await admin
+    .from('social_accounts')
+    .select('id')
+    .eq('organization_id', org.id)
+    .eq('handle', 'rival_one_e2e')
+    .single();
+  const observe = (day: string, value: number) => ({
+    organization_id: org.id,
+    social_account_id: account!.id,
+    metric_key: 'followers',
+    source_metric: 'business_discovery.followers_count',
+    value,
+    availability: 'available' as const,
+    period: 'lifetime' as const,
+    metric_date: day,
+    captured_at: `${day}T06:00:00Z`,
+    data_source: 'live_public' as const,
+  });
+  await admin
+    .from('account_metric_snapshots')
+    .insert([observe('2026-09-07', 20400), observe('2026-10-07', 21300)]);
+  await admin
+    .from('social_accounts')
+    .update({ first_observed_at: '2026-09-07T06:00:00Z', last_observed_at: '2026-10-07T06:00:00Z' })
+    .eq('id', account!.id);
+  const { data: post } = await admin
+    .from('posts')
+    .insert({
+      organization_id: org.id,
+      social_account_id: account!.id,
+      platform_key: 'instagram',
+      external_id: 'e2e-rival-post',
+      published_at: '2026-10-01T10:00:00Z',
+      published_local_date: '2026-10-01',
+      caption: 'Rival launch',
+      media_format: 'image',
+      data_source: 'live_public',
+    })
+    .select('id')
+    .single();
+  await admin.from('post_metric_snapshots').insert({
+    organization_id: org.id,
+    post_id: post!.id,
+    metric_key: 'likes',
+    source_metric: 'business_discovery.like_count',
+    value: null,
+    availability: 'hidden_by_owner',
+    period: 'lifetime',
+    captured_at: '2026-10-02T06:00:00Z',
+    post_age_hours: 0,
+    data_source: 'live_public',
+  });
+
+  await page.goto(`/${org.slug}/accounts/${account!.id}`);
+  await expect(page.getByText(/Observed since 07\/09\/2026/)).toBeVisible();
+  await expect(page.getByText('+4.4% observed growth')).toBeVisible();
+
+  // The dashboard shows the same observed growth from stored observations only.
+  await page.goto(`/${org.slug}/dashboard?range=90`);
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByText('No profiles to monitor yet')).toHaveCount(0);
+  await page.goto(`/${org.slug}/accounts/${account!.id}`);
+  await expect(page.getByText('hidden by owner')).toBeVisible();
+
+  // Removing needs the word DELETE, then deletes the profile and its data.
+  await page.getByRole('button', { name: 'Remove profile and data' }).click();
+  await expect(page.getByText('Type DELETE to confirm.')).toBeVisible();
+  await page.locator('#remove-confirm:visible').fill('DELETE');
+  await page.getByRole('button', { name: 'Remove profile and data' }).click();
+  await expect(page).toHaveURL(new RegExp(`/${org.slug}/accounts\\?removed=1`));
+  const { count } = await admin
+    .from('account_metric_snapshots')
+    .select('*', { count: 'exact', head: true })
+    .eq('social_account_id', account!.id);
+  expect(count).toBe(0);
 });

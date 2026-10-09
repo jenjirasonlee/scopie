@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { initialFormState, type FormState } from '@/lib/forms';
+import { BUSINESS_ROLE_LABELS, BUSINESS_ROLES } from '@/lib/accounts/labels';
 import { ACCOUNT_TYPES } from '@/schemas/social-account';
 
 export type AccountFormDefaults = {
@@ -23,7 +24,7 @@ export type AccountFormDefaults = {
   language?: string | null;
   timezone?: string | null;
   ownerUserId?: string | null;
-  isCompetitor?: boolean;
+  businessRole?: string;
   notes?: string | null;
 };
 
@@ -144,22 +145,20 @@ export function AccountForm({
 
       <fieldset className="space-y-4">
         <legend className="mb-3 text-sm font-semibold">Other</legend>
-        <label className="flex items-start gap-2.5 text-[13px]">
-          <input
-            type="checkbox"
-            name="isCompetitor"
-            defaultChecked={
-              state.values ? state.values.isCompetitor === 'on' : Boolean(defaults.isCompetitor)
-            }
-            className="mt-0.5 size-4 accent-[var(--primary)]"
-          />
-          <span>
-            <span className="font-medium">Competitor account</span>
-            <span className="text-muted-foreground block">
-              Not owned by your organization. Only public data will ever be used for it.
-            </span>
-          </span>
-        </label>
+        <FormField
+          id="businessRole"
+          label="Why you track it"
+          hint="Your own profiles can also be connected for private metrics."
+          errors={errors.businessRole}
+        >
+          <NativeSelect name="businessRole" defaultValue={value('businessRole') || 'owned'}>
+            {BUSINESS_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {BUSINESS_ROLE_LABELS[role]}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
         <FormField id="notes" label="Notes" optional errors={errors.notes}>
           <Textarea name="notes" defaultValue={value('notes')} rows={3} />
         </FormField>

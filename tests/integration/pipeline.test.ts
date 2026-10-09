@@ -5,8 +5,8 @@ import { ingest } from '@/lib/ingest/ingest';
 import { runImport } from '@/lib/imports/run';
 import { METRIC_DEFINITIONS, PLATFORM_METRIC_MAP } from '@/lib/metrics/registry';
 import { AuthError } from '@/lib/platforms/errors';
-import { CONNECTED_PLATFORMS } from '@/lib/platforms/registry';
-import type { PlatformAdapter } from '@/lib/platforms/types';
+import { CONNECTED_PLATFORMS, PUBLIC_DATA_PLATFORMS } from '@/lib/platforms/registry';
+import type { PrivateDataAdapter } from '@/lib/platforms/types';
 import { loadAccountContext } from '@/lib/sync/credentials';
 import { runSyncJob } from '@/lib/sync/engine';
 import {
@@ -125,9 +125,9 @@ describe('connections', () => {
       connection_id: connectionId,
       external_id: 'fixture-page-1',
       connection_status: 'connected',
-      primary_data_source: 'authenticated',
+      access_type: 'connected',
     });
-    expect(data!.tracking_started_at).not.toBeNull();
+    expect(data!.first_observed_at).not.toBeNull();
   });
 
   it('keeps users from editing connection fields directly', async () => {
@@ -169,15 +169,20 @@ describe('where data may come from', () => {
   });
 
   it('refuses live data for an account that is not connected', async () => {
-    const { error } = await admin.from('posts').insert(post('authenticated'));
+    const { error } = await admin.from('posts').insert(post('live_connected'));
     expect(error?.message).toMatch(/requires a connected account/);
+  });
+
+  it('refuses public data for a platform without an official public API in Scopie', async () => {
+    const { error } = await admin.from('posts').insert(post('live_public'));
+    expect(error?.message).toMatch(/no public data collector/);
   });
 
   it('never lets a user write live data, even for a connected account', async () => {
     const { error } = await owner.client
       .from('posts')
-      .insert(post('authenticated', connectedAccountId));
-    expect(error?.message).toMatch(/Only imported or manual data/);
+      .insert(post('live_connected', connectedAccountId));
+    expect(error?.message).toMatch(/Only imported data can be added by users/);
   });
 
   it('needs an import batch for imported data', async () => {
@@ -186,21 +191,21 @@ describe('where data may come from', () => {
   });
 
   it('rejects a value that disagrees with its availability', async () => {
-    const { data: created } = await owner.client
+    const { data: created } = await admin
       .from('posts')
-      .insert(post('manual'))
+      .insert(post('live_connected', connectedAccountId))
       .select('id')
       .single();
-    const { error } = await owner.client.from('post_metric_snapshots').insert({
+    const { error } = await admin.from('post_metric_snapshots').insert({
       organization_id: orgId,
       post_id: created!.id,
       metric_key: 'reach',
-      source_metric: 'manual',
+      source_metric: 'post_impressions_unique',
       post_age_hours: 0, // set by the database
       value: 10,
       availability: 'not_permitted',
       period: 'lifetime',
-      data_source: 'manual',
+      data_source: 'live_connected',
       captured_at: new Date().toISOString(),
     });
     expect(error?.code).toBe('23514'); // check constraint: value and availability must agree
@@ -310,7 +315,7 @@ describe('ingest', () => {
       organizationId: orgId,
       socialAccountId: connectedAccountId,
       platformKey: 'facebook',
-      dataSource: 'authenticated' as const,
+      dataSource: 'live_connected' as const,
       capturedAt: '2026-09-10T06:00:00.000Z',
       accountMetrics: [
         {
@@ -331,7 +336,7 @@ describe('ingest', () => {
 });
 
 describe('sync engine', () => {
-  const fakeAdapter = (fail?: Error): PlatformAdapter => ({
+  const fakeAdapter = (fail?: Error): PrivateDataAdapter => ({
     platformKey: 'facebook',
     async getAccountMetrics(_ctx, range) {
       if (fail) throw fail;
@@ -389,7 +394,7 @@ describe('sync engine', () => {
     },
   });
 
-  const deps = (adapter: PlatformAdapter) => ({
+  const deps = (adapter: PrivateDataAdapter) => ({
     db: admin,
     adapterFor: () => adapter,
     contextFor: (account: Parameters<typeof loadAccountContext>[1]) =>
@@ -415,7 +420,7 @@ describe('sync engine', () => {
       .from('posts')
       .select('id, data_source')
       .eq('external_id', 'fb-post-1');
-    expect(posts).toEqual([expect.objectContaining({ data_source: 'authenticated' })]);
+    expect(posts).toEqual([expect.objectContaining({ data_source: 'live_connected' })]);
     const { data: facts } = await owner.client
       .from('post_metric_snapshots')
       .select('metric_key, value, availability, sync_run_id')
@@ -479,12 +484,17 @@ describe('sync engine', () => {
 });
 
 describe('metric dictionary', () => {
-  it('lists the same connected platforms as the code', async () => {
+  it('lists the same connected and public platforms as the code', async () => {
     const { data } = await admin
       .from('platforms')
-      .select('key')
-      .eq('connector_status', 'available');
-    expect(data!.map((row) => row.key).sort()).toEqual([...CONNECTED_PLATFORMS].sort());
+      .select('key, public_data_status, private_data_status');
+    const keys = (status: 'public_data_status' | 'private_data_status') =>
+      data!
+        .filter((row) => row[status] === 'available')
+        .map((row) => row.key)
+        .sort();
+    expect(keys('private_data_status')).toEqual([...CONNECTED_PLATFORMS].sort());
+    expect(keys('public_data_status')).toEqual([...PUBLIC_DATA_PLATFORMS].sort());
   });
 
   it('matches the database', async () => {

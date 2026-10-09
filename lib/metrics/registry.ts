@@ -25,6 +25,8 @@ export type MetricDefinition = {
 export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
   m('followers', 'Followers', 'count', 'last', true, 'account'),
   m('followers_gained', 'Followers gained', 'count', 'sum', true, 'account'),
+  m('following', 'Following', 'count', 'last', false, 'account'),
+  m('posts_total', 'Posts on profile', 'count', 'last', true, 'account'),
   m('followers_lost', 'Followers lost', 'count', 'sum', false, 'account'),
   m('follower_change', 'Net follower change', 'count', 'sum', true, 'account', [
     'followers',
@@ -67,6 +69,7 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     'post',
     ['interactions', 'followers'],
   ),
+  m('public_engagement', 'Public engagement', 'count', 'sum', true, 'post', ['likes', 'comments']),
 ];
 
 function m(
@@ -148,6 +151,13 @@ export const PLATFORM_METRIC_MAP: readonly PlatformMetricMapping[] = [
     'ig_reels_watch_time',
     'ms_to_seconds',
   ),
+  // Public data from Business Discovery (no owner authorization).
+  pm('instagram', 'account', 'business_discovery.followers_count', 'followers', 'audience_size'),
+  pm('instagram', 'account', 'business_discovery.media_count', 'posts_total', 'posts_total'),
+  pm('instagram', 'post', 'business_discovery.like_count', 'likes', 'likes'),
+  pm('instagram', 'post', 'business_discovery.comments_count', 'comments', 'comments'),
+  // Includes paid views, so never compared with the insights "views".
+  pm('instagram', 'post', 'business_discovery.view_count', 'views', 'ig_public_reel_views'),
   pm('facebook', 'account', 'followers_count', 'followers', 'audience_size'),
   pm('facebook', 'account', 'page_impressions_unique', 'reach', 'meta_reach'),
   pm('facebook', 'account', 'page_post_engagements', 'interactions', 'fb_page_engagements'),
@@ -190,17 +200,23 @@ export function findMapping(
 }
 
 /**
- * Comparability class of a metric on a platform. Metrics without a mapping (e.g. imported
+ * Comparability class of a metric on a platform. Pass the source metric when known: one
+ * Scopie metric can come from sources that are not comparable (Instagram public Reel views
+ * include paid views; insights views don't). Metrics without a mapping (e.g. imported
  * LinkedIn numbers) are only comparable within their own platform.
  */
 export function comparabilityClass(
   platformKey: string,
   scope: MetricScope,
   metricKey: string,
+  sourceMetric?: string,
 ): string {
   const mapping = PLATFORM_METRIC_MAP.find(
     (entry) =>
-      entry.platformKey === platformKey && entry.scope === scope && entry.metricKey === metricKey,
+      entry.platformKey === platformKey &&
+      entry.scope === scope &&
+      entry.metricKey === metricKey &&
+      (sourceMetric === undefined || entry.sourceMetric === sourceMetric),
   );
   return mapping?.comparabilityClass ?? `${platformKey}:${metricKey}`;
 }

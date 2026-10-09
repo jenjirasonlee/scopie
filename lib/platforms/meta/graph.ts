@@ -21,6 +21,8 @@ export type GraphClientOptions = HttpOptions & {
   appSecret?: string;
   /** Collects raw responses for debugging retention. */
   onResponse?: (endpoint: string, body: unknown) => void;
+  /** Receives the app's platform rate-limit usage (0-100) after each call that reports it. */
+  onUsage?: (percent: number) => void;
 };
 
 type GraphErrorBody = {
@@ -61,6 +63,24 @@ export function retryAfterFromHeaders(headers: Headers): number {
     }
   }
   return 15 * 60;
+}
+
+/**
+ * The highest percentage in Meta's X-App-Usage header (call count, CPU time, total time),
+ * or null when the header is missing. Business Discovery counts against this limit.
+ */
+export function appUsagePercent(headers: Headers): number | null {
+  const raw = headers.get('x-app-usage');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const values = ['call_count', 'total_cputime', 'total_time']
+      .map((key) => Number(parsed[key]))
+      .filter((value) => Number.isFinite(value));
+    return values.length ? Math.max(...values) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Maps a Graph API error response to a typed connector error. */
@@ -120,6 +140,8 @@ export class GraphClient {
       }
     }
     const response = await fetchWithRetry(this.url(path, query), { method }, this.options);
+    const usage = appUsagePercent(response.headers);
+    if (usage !== null) this.options.onUsage?.(usage);
     let body: unknown;
     try {
       body = await response.json();

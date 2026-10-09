@@ -32,6 +32,8 @@ export type PostWithMetrics = {
     value: number | null;
     availability: Enums<'metric_availability'> | null;
     capturedAt: string | null;
+    /** Each source keeps its own value: public and connected numbers are never mixed. */
+    source: Enums<'data_source'> | null;
   }[];
 };
 
@@ -90,7 +92,7 @@ export async function listRecentPosts(
   if (!posts.length) return [];
   const { data: metrics, error: metricsError } = await supabase
     .from('post_metrics_latest')
-    .select('post_id, metric_key, value, availability, captured_at')
+    .select('post_id, metric_key, value, availability, captured_at, data_source')
     .in(
       'post_id',
       posts.map((post) => post.id),
@@ -111,6 +113,7 @@ export async function listRecentPosts(
         value: metric.value,
         availability: metric.availability,
         capturedAt: metric.captured_at,
+        source: metric.data_source,
       })),
   }));
 }
@@ -140,4 +143,69 @@ export async function listImportBatches(orgId: string, limit = 20) {
     .limit(limit);
   if (error) throw error;
   return data;
+}
+
+export type ObservationHistory = {
+  followers: {
+    observedAt: string;
+    day: string;
+    value: number | null;
+    source: Enums<'data_source'>;
+  }[];
+  profileChanges: {
+    observedAt: string;
+    username: string | null;
+    displayName: string | null;
+    biography: string | null;
+    website: string | null;
+  }[];
+};
+
+/**
+ * Follower observations and profile changes for one profile, oldest first. Only what was
+ * observed: no filled-in days. Public and connected observations are kept apart by source.
+ */
+export async function getObservationHistory(
+  orgId: string,
+  accountId: string,
+  limit = 400,
+): Promise<ObservationHistory> {
+  const supabase = await createClient();
+  const [followers, profiles] = await Promise.all([
+    supabase
+      .from('account_metric_snapshots')
+      .select('captured_at, metric_date, value, data_source')
+      .eq('organization_id', orgId)
+      .eq('social_account_id', accountId)
+      .eq('metric_key', 'followers')
+      .eq('period', 'lifetime')
+      .order('captured_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('profile_snapshots')
+      .select('observed_at, username, display_name, biography, website')
+      .eq('organization_id', orgId)
+      .eq('social_account_id', accountId)
+      .order('observed_at', { ascending: false })
+      .limit(20),
+  ]);
+  if (followers.error) throw followers.error;
+  if (profiles.error) throw profiles.error;
+  return {
+    followers: followers.data
+      .map((row) => ({
+        observedAt: row.captured_at,
+        day: row.metric_date,
+        value: row.value,
+        source: row.data_source,
+      }))
+      .reverse(),
+    profileChanges: profiles.data.map((row) => ({
+      observedAt: row.observed_at,
+      username: row.username,
+      displayName: row.display_name,
+      biography: row.biography,
+      website: row.website,
+    })),
+  };
 }
