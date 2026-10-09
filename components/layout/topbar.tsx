@@ -16,7 +16,7 @@ export async function Topbar({ params }: { params: Promise<{ orgSlug: string }> 
   ]);
   return (
     <>
-      <header className="bg-background flex h-12 items-center gap-2 border-b px-3 md:px-6">
+      <header className="bg-background flex h-12 items-center gap-2 border-b px-3 md:px-6 print:hidden">
         <MobileNav counts={navCounts} />
         <OrgSwitcher
           current={{ id: org.id, name: org.name, slug: org.slug, role, is_demo: org.is_demo }}

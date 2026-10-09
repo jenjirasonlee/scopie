@@ -9,9 +9,18 @@ export const DECISION_LABELS: Record<ReviewDecision, string> = {
 };
 
 export type NotificationKind =
-  'review_requested' | 'approved' | 'changes_requested' | 'rejected' | 'mentioned' | 'commented';
+  | 'review_requested'
+  | 'approved'
+  | 'changes_requested'
+  | 'rejected'
+  | 'mentioned'
+  | 'commented'
+  | 'report_ready';
 
-/** "Sam asked you to review", followed by the content title. */
+/**
+ * "Sam asked you to review", followed by the content title. A new report reads as a whole
+ * sentence instead (reportReadyText in lib/reports/shared.ts).
+ */
 export const NOTIFICATION_TEXT: Record<NotificationKind, string> = {
   review_requested: 'asked for a review of',
   approved: 'approved',
@@ -19,6 +28,7 @@ export const NOTIFICATION_TEXT: Record<NotificationKind, string> = {
   rejected: 'rejected',
   mentioned: 'mentioned you on',
   commented: 'commented on',
+  report_ready: 'made',
 };
 
 /** The review queue's tabs. */

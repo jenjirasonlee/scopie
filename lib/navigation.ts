@@ -133,7 +133,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Reports',
     segment: 'reports',
     icon: FileText,
-    status: 'planned',
+    status: 'available',
     phase: 9,
     summary: 'Weekly social intelligence reports.',
     planned: [

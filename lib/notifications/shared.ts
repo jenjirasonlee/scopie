@@ -1,11 +1,18 @@
 import { utcToZonedParts } from '@/lib/calendar/time';
 import type { NotificationKind } from '@/lib/approvals/shared';
+import { reportHref } from '@/lib/reports/shared';
 
-/** Where a notification leads: the content, or its comments for comment notifications. */
+/**
+ * Where a notification leads: the report for a new report, else the content, or its
+ * comments for comment notifications.
+ */
 export function notificationHref(
   orgSlug: string,
-  notification: { kind: NotificationKind; itemId: string | null },
+  notification: { kind: NotificationKind; itemId: string | null; reportId?: string | null },
 ): string | null {
+  if (notification.kind === 'report_ready') {
+    return notification.reportId ? reportHref(orgSlug, notification.reportId) : null;
+  }
   if (!notification.itemId) return null;
   const href = `/${orgSlug}/content/${notification.itemId}`;
   return notification.kind === 'mentioned' || notification.kind === 'commented'

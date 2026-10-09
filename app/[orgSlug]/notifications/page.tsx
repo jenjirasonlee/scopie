@@ -27,7 +27,7 @@ export default async function NotificationsPage({
         description={
           org.is_demo
             ? `${org.name}. Everything below is DEMO DATA generated for testing; none of it is real.`
-            : 'Review requests, decisions, comments and mentions on content in this organization.'
+            : 'Review requests, decisions, comments and mentions on content in this organization, and new weekly reports.'
         }
         actions={
           unread > 0 ? (
@@ -45,7 +45,7 @@ export default async function NotificationsPage({
           <p className="font-medium">No notifications yet</p>
           <p className="text-muted-foreground mx-auto mt-1 max-w-md text-[13px]">
             You’ll hear here when someone asks you to review content, decides on content you wrote,
-            or mentions you in a comment.
+            mentions you in a comment, or when a weekly report is ready.
           </p>
         </div>
       ) : (

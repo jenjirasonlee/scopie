@@ -14,6 +14,7 @@ import { measureStrategy } from '@/lib/strategy/measure';
 import { getStrategy, listStrategies } from '@/lib/strategy/queries';
 import { periodState, todayIn } from '@/lib/strategy/shared';
 import { buildWeeklySnapshot } from './build';
+import { formatWeek } from './shared';
 import type { ReportSnapshot, ReportStrategy, ReportWeek } from './types';
 import { isoWeekday, lastFullWeek, localHour, previousWeek, weekPeriod } from './week';
 
@@ -28,24 +29,6 @@ const REUSE_ANALYSIS_HOURS = 24;
 export function reportSetup(): { canRun: boolean; missing: string[] } {
   const missing = serverEnv().SUPABASE_SERVICE_ROLE_KEY ? [] : ['Supabase service role key'];
   return { canRun: !missing.length, missing };
-}
-
-const DAY_MONTH = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-});
-const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-export function weekLabel(week: ReportWeek): string {
-  const start = new Date(`${week.start}T00:00:00Z`);
-  const end = new Date(`${week.end}T00:00:00Z`);
-  return `${DAY_MONTH.format(start)} – ${DAY_MONTH_YEAR.format(end)}`;
 }
 
 function objectiveDisplay(
@@ -281,7 +264,7 @@ export async function generateWeeklyReport(input: {
     };
   }
 
-  const title = `Weekly report, ${weekLabel(week)}`;
+  const title = `Weekly report, ${formatWeek(week)}`;
   const { data: report, error } = await admin
     .from('reports')
     .insert({

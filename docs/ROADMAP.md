@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 8 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 9 is next. Last updated: 2026-10-08
+> Status: Phases 1 to 9 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 10 is next. Last updated: 2026-10-09
 
 ## 1. Product focus
 
@@ -41,7 +41,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **6** Review + approval ✅                | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
 | **7** Content strategy ✅                 | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
 | **8** AI analyst + recommendations ✅     | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
-| **9** Weekly intelligence reports         | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
+| **9** Weekly intelligence reports ✅      | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
 | **10** More platforms                     | Facebook Pages public data (after Meta's Page Public Content Access approval), Instagram hashtag search (after approval), TikTok, X, LinkedIn through official access or a licensed provider; CSV import until then                                                                            | Each with an honest public/private capability list                                                                  |
 | **11** Productivity + career intelligence | Workflow stats, career intelligence, AI chat and content assistant, PDF export                                                                                                                                                                                                                 | —                                                                                                                   |
 
@@ -67,6 +67,7 @@ Phases 5–7 don't need platform data, so they can run alongside 3–4. Platform
 | A Supabase project and a Trigger.dev project                                                                                                                                                                                                      | Before going live             | Jen         |
 | A YouTube Data API key                                                                                                                                                                                                                            | Phase 4                       | Jen         |
 | OpenAI API key                                                                                                                                                                                                                                    | Phase 8                       | Jen         |
+| A random `REPORTS_CRON_SECRET` set in the app and in Trigger.dev, and `SCOPIE_APP_URL` in Trigger.dev                                                                                                                                             | Phase 9                       | Jen         |
 
 ## 5. Risks
 
@@ -131,6 +132,14 @@ It works without any AI key: Scopie's own rules write the text from the numbers,
 
 Not built yet: scheduled weekly runs (Phase 9), trends over 8 to 12 weeks and anomaly scores over longer baselines, an organization setting to switch the model off, cost tracking per call, and checking later whether a followed recommendation was followed by better results.
 
-## 14. Next step
+## 14. Phase 9 outcome
 
-**Phase 9: Weekly intelligence reports.** Scheduled weekly report, snapshot, in-app view, sharing.
+Delivered: weekly reports. Every Monday from 06:00 in the organization's time zone, Scopie makes the report for the week before (Monday to Sunday): a short summary, the week in numbers against the week before (followers gained, posts published, median likes + comments at 7 days, content published and review decisions in Scopie), markets (own profiles ranked by follower growth, per platform), competitor watch (own profiles and competitors together), top content, where each active strategy stood, key insights, opportunities, risks and up to three recommended actions from the latest analysis. A report is a snapshot: its numbers and sentences are saved when it is made and never change afterwards. Anything that couldn't be measured says N/A with the reason, and profiles left out of a ranking are listed with why. Members are told in the app when a report is ready; managers and up can also make last week's report by hand. Reports are shared inside Scopie: every member of the organization can open them, copy the link or print them. There is no email.
+
+The schedule is a Trigger.dev task (`trigger/reports.ts`) that asks the app every hour to make the reports that are due, using `REPORTS_CRON_SECRET`; a missed hour is caught up later in the week.
+
+Not built yet: PDF export (after V1), email delivery, reports for other periods (monthly, per campaign), and comparing a report with earlier ones.
+
+## 15. Next step
+
+**Phase 10: More platforms.** Facebook Pages public data and Instagram hashtag search once Meta approves them, then TikTok, X and LinkedIn through official access or a licensed provider.

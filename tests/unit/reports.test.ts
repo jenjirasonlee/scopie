@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BenchmarkProfileData } from '@/lib/analytics/benchmark';
 import type { FollowerObservation, PostRecord, ProfileRecord } from '@/lib/analytics/types';
 import { buildWeeklySnapshot, type WeeklyReportInput } from '@/lib/reports/build';
-import { reportIsDue, weekLabel } from '@/lib/reports/generate';
+import { reportIsDue } from '@/lib/reports/generate';
 import {
   addDays,
   isoWeekday,
@@ -49,10 +49,6 @@ describe('report weeks', () => {
     // The week the clocks go back is 169 hours long.
     const autumn = weekPeriod({ start: '2026-10-19', end: '2026-10-25' }, TZ);
     expect((autumn.end.getTime() - autumn.start.getTime()) / 3_600_000).toBe(169);
-  });
-
-  it('labels the week', () => {
-    expect(weekLabel({ start: '2026-09-28', end: '2026-10-04' })).toBe('28 Sept – 4 Oct 2026');
   });
 
   it('is due from Monday 06:00 local time', () => {
