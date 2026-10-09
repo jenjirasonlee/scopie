@@ -160,10 +160,14 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Productivity',
     segment: 'productivity',
     icon: Timer,
-    status: 'planned',
+    status: 'available',
     phase: 11,
     summary: 'Team workflow insights from Scopie data only. No employee surveillance.',
-    planned: ['Approval cycles and time in review', 'Publishing consistency and strategy coverage'],
+    planned: [
+      'Approval cycles and time in review',
+      'Publishing consistency and strategy coverage',
+      'A private view of your own impact',
+    ],
   },
   {
     key: 'settings',
