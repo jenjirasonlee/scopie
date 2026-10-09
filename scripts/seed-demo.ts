@@ -125,6 +125,20 @@ const COMPETITORS: {
     country: 'US',
     role: 'influencer',
   },
+  {
+    name: 'Hydro Rival TV (DEMO)',
+    handle: 'hydrorivaltv_demo',
+    platform: 'youtube',
+    country: 'NL',
+    role: 'competitor',
+  },
+  {
+    name: 'Grow Guides Channel (DEMO)',
+    handle: 'growguides_demo',
+    platform: 'youtube',
+    country: 'US',
+    role: 'influencer',
+  },
 ];
 
 function requireEnv(name: string): string {
@@ -218,7 +232,7 @@ async function main() {
       platform_key: competitor.platform,
       display_name: competitor.name,
       handle: competitor.handle,
-      account_type: 'business',
+      account_type: competitor.platform === 'youtube' ? 'channel' : 'business',
       country_code: competitor.country,
       business_role: competitor.role,
       connection_status: 'demo',

@@ -31,6 +31,12 @@ export function BulkAddProfiles({
           />
         </FormField>
         <div className="space-y-4">
+          <FormField id="bulk-platform" label="Platform">
+            <NativeSelect name="platform" defaultValue="instagram">
+              <option value="instagram">Instagram</option>
+              <option value="youtube">YouTube</option>
+            </NativeSelect>
+          </FormField>
           <FormField id="bulk-role" label="Why you track them">
             <NativeSelect name="businessRole" defaultValue="competitor" required>
               {BUSINESS_ROLES.map((role) => (

@@ -241,8 +241,9 @@ describe('X-App-Usage', () => {
 });
 
 describe('public collector registry', () => {
-  it('has Instagram only, until other official public APIs are built', () => {
+  it('has Instagram and YouTube, until other official public APIs are built', () => {
     expect(hasPublicCollector('instagram')).toBe(true);
+    expect(hasPublicCollector('youtube')).toBe(true);
     expect(hasPublicCollector('linkedin')).toBe(false);
     expect(createPublicCollector('tiktok')).toBeNull();
     expect(createPublicCollector('instagram')).toBeInstanceOf(InstagramPublicCollector);

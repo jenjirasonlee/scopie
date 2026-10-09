@@ -320,3 +320,67 @@ test('public profiles: viewer setup explained, bulk add, observed history, remov
     .eq('social_account_id', account!.id);
   expect(count).toBe(0);
 });
+
+test('YouTube channels without OAuth, ranked in benchmarks only on what was observed', async ({
+  page,
+}) => {
+  const user = await createUser('e2e-bench');
+  const org = await createOrg(user, 'Benchmark Org');
+  await signIn(page, user.email);
+
+  // YouTube needs only a server API key; CI has none, so settings says so.
+  await page.goto(`/${org.slug}/settings/public-data`);
+  await expect(page.getByText('API key missing')).toBeVisible();
+
+  await page.goto(`/${org.slug}/accounts/new`);
+  await page.locator('#bulk-platform:visible').selectOption('youtube');
+  await page
+    .locator('#bulk-handles:visible')
+    .fill('@growchannel_e2e,NL\nhttps://www.youtube.com/@otherchannel-e2e');
+  await page.getByRole('button', { name: 'Add all' }).click();
+  await expect(page.getByText(/Added 2 profiles/)).toBeVisible();
+
+  // Two observations for one channel, none for the other.
+  const admin = adminClient();
+  const { data: channels } = await admin
+    .from('social_accounts')
+    .select('id, handle, platform_key, access_type')
+    .eq('organization_id', org.id)
+    .order('handle');
+  expect(channels).toMatchObject([
+    { handle: 'growchannel_e2e', platform_key: 'youtube', access_type: 'public' },
+    { handle: 'otherchannel-e2e', platform_key: 'youtube', access_type: 'public' },
+  ]);
+  const day = (daysAgo: number) =>
+    new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+  const observe = (date: string, value: number) => ({
+    organization_id: org.id,
+    social_account_id: channels![0]!.id,
+    metric_key: 'followers',
+    source_metric: 'statistics.subscriberCount',
+    value,
+    availability: 'available' as const,
+    period: 'lifetime' as const,
+    metric_date: date,
+    captured_at: `${date}T06:00:00Z`,
+    data_source: 'live_public' as const,
+  });
+  await admin
+    .from('account_metric_snapshots')
+    .insert([observe(day(20), 20000), observe(day(2), 21000)]);
+  await admin
+    .from('social_accounts')
+    .update({ first_observed_at: `${day(20)}T06:00:00Z`, last_observed_at: `${day(2)}T06:00:00Z` })
+    .eq('id', channels![0]!.id);
+
+  await page.goto(`/${org.slug}/benchmarks?platform=youtube&range=30`);
+  await expect(page.getByText(/Ranked by observed follower growth.*YouTube only/)).toBeVisible();
+  await expect(page.getByText('Not ranked')).toBeVisible();
+  await expect(page.getByText('not enough observations').first()).toBeVisible();
+
+  // Benchmark groups.
+  await page.goto(`/${org.slug}/benchmarks/groups`);
+  await page.locator('input[name="name"]:visible').first().fill('Dutch channels');
+  await page.getByRole('button', { name: /Create/ }).click();
+  await expect(page.getByText('Dutch channels').first()).toBeVisible();
+});

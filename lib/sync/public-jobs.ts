@@ -40,8 +40,9 @@ export class UsagePausedError extends RateLimitError {
 }
 
 /**
- * Runs one public job: reads a profile through the organization's viewer account and
- * stores what was observed, labelled live_public. Nothing is written for data that was
+ * Runs one public job: reads a profile through the platform's official public API (the
+ * organization's viewer account for Instagram, a server API key for YouTube) and stores
+ * what was observed, labelled live_public. Nothing is written for data that was
  * not observed; a failed run leaves a gap, never a zero or a copied value.
  */
 export async function runPublicJob(

@@ -15,6 +15,8 @@ const serverEnvSchema = z.object({
     .optional(),
   META_APP_ID: z.string().regex(/^\d+$/, 'must be the numeric Meta App ID').optional(),
   META_APP_SECRET: z.string().min(16).optional(),
+  /** YouTube Data API v3 key for public channels (Google Cloud Console → Credentials). */
+  YOUTUBE_API_KEY: z.string().min(20).optional(),
   META_GRAPH_API_VERSION: z
     .string()
     .regex(/^v\d+\.\d+$/)
@@ -44,6 +46,7 @@ export function serverEnv(): ServerEnv {
     META_APP_ID: process.env.META_APP_ID,
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_GRAPH_API_VERSION: process.env.META_GRAPH_API_VERSION,
+    YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
   });
 }
 

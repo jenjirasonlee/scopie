@@ -1,0 +1,22 @@
+{
+  "kind": "youtube#channelListResponse",
+  "items": [
+    {
+      "kind": "youtube#channel",
+      "id": "UCfixture000000000000001",
+      "snippet": {
+        "title": "Example Grow Channel (fixture)",
+        "description": "Fixture channel for tests. Not a real channel. #hydroponics",
+        "customUrl": "@examplegrow",
+        "thumbnails": { "default": { "url": "https://yt3.example.com/fixture.jpg" } }
+      },
+      "statistics": {
+        "viewCount": "1234567",
+        "subscriberCount": "21300",
+        "hiddenSubscriberCount": false,
+        "videoCount": "240"
+      },
+      "contentDetails": { "relatedPlaylists": { "uploads": "UUfixture000000000000001" } }
+    }
+  ]
+}

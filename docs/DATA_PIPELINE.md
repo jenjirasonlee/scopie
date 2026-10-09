@@ -18,10 +18,10 @@ DEMO generator ──────► lib/demo/generate.ts ───────�
 
 Scopie reads profiles in two independent ways:
 
-| Mode          | Profiles                                                  | Authorization                                   | Code                                                    |
-| ------------- | --------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
-| **Public**    | Any profile: competitors, industry, creators, CANNA's own | None from the owner; one viewer account per org | `PublicProfileCollector`, `lib/sync/public-jobs.ts`     |
-| **Connected** | CANNA's own profiles only (`business_role = owned`)       | OAuth by someone who manages the account        | `PrivateDataAdapter`, the connected jobs in `engine.ts` |
+| Mode          | Profiles                                                  | Authorization                                                                           | Code                                                    |
+| ------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Public**    | Any profile: competitors, industry, creators, CANNA's own | None from the owner; a viewer account per org (Instagram) or a server API key (YouTube) | `PublicProfileCollector`, `lib/sync/public-jobs.ts`     |
+| **Connected** | CANNA's own profiles only (`business_role = owned`)       | OAuth by someone who manages the account                                                | `PrivateDataAdapter`, the connected jobs in `engine.ts` |
 
 A connected Instagram profile is observed both ways, so CANNA can be compared with competitors on
 the same public numbers.
@@ -68,6 +68,12 @@ add-profile preview), `observeProfile` (profile fields, totals and the newest pa
   picture are requested and dropped if Meta refuses them. Posts, 25 per page: link, caption, time,
   type, likes, comments and Reel views. A missing like count is stored as `hidden_by_owner`; views on a
   non-Reel post as `not_applicable`. Reach, saves and shares are not requested.
+- **YouTube** (`lib/platforms/youtube/public.ts`): the Data API v3 with a server API key, no viewer
+  and no OAuth (see [API_INTEGRATIONS.md](API_INTEGRATIONS.md) §4b). Profile: title, description,
+  subscribers (`followers`, rounded by YouTube), video count (`posts_total`) and lifetime channel views.
+  Videos, 50 per page from the uploads playlist: link, title, description, time, views, likes and
+  comments. Hidden likes and turned-off comments are stored as `hidden_by_owner`; upcoming premieres
+  are skipped. It reports no `appUsage`; a quota error pauses the run for an hour.
 - Personal, unknown and age-restricted accounts can't be read; the collector raises
   `profile_not_found` and nothing is stored.
 
@@ -96,7 +102,8 @@ two passes. Constants are in `lib/sync/schedule.ts`.
 ### 3.1 Public jobs
 
 Every active profile with a handle, on a platform with a public collector, gets three jobs, as long as
-its organization has chosen a viewer account. DEMO profiles never get them.
+its platform's credential exists: a chosen viewer account for Instagram, `YOUTUBE_API_KEY` on the
+server for YouTube. DEMO profiles never get them.
 
 | Job                                               | How often  | Page limit | What it does                                                                                                                                                                                       |
 | ------------------------------------------------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

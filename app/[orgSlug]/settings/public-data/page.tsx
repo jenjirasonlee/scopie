@@ -11,6 +11,7 @@ import { getOrgContext } from '@/lib/orgs/queries';
 import { clearPublicDataViewer, setPublicDataViewer } from '@/lib/public-data/actions';
 import { getPublicDataViewer } from '@/lib/public-data/queries';
 import { LOOKUPS_PER_HOUR } from '@/lib/public-data/shared';
+import { serverEnv } from '@/lib/server-env';
 
 export const metadata: Metadata = { title: 'Public data' };
 
@@ -18,6 +19,7 @@ export default async function PublicDataPage({ params }: { params: Promise<{ org
   const { orgSlug } = await params;
   const { org, role } = await getOrgContext(orgSlug);
   const canManage = can(role, 'accounts.manage');
+  const youtubeReady = Boolean(serverEnv().YOUTUBE_API_KEY) && !org.is_demo;
   const [viewer, { connections, assets }] = await Promise.all([
     getPublicDataViewer(org.id),
     listConnections(org.id),
@@ -110,6 +112,24 @@ export default async function PublicDataPage({ params }: { params: Promise<{ org
             </p>
           )
         ) : null}
+      </div>
+
+      <div className="bg-card space-y-2 rounded-lg border p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold">YouTube</h3>
+          {youtubeReady ? (
+            <Badge variant="success">Ready</Badge>
+          ) : (
+            <Badge variant="muted">API key missing</Badge>
+          )}
+        </div>
+        <p className="text-[13px]">
+          Public YouTube channels are read with a YouTube Data API key set on the server. No account
+          needs to be connected and the channels approve nothing.
+          {youtubeReady
+            ? ' YouTube channels you add are observed daily.'
+            : ' Until the key is set, YouTube channels you add wait and nothing is read. The setup steps are in docs/PUBLIC_DATA_SETUP.md.'}
+        </p>
       </div>
 
       <div className="space-y-2">

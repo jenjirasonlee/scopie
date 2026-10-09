@@ -64,6 +64,12 @@ mirrored in `platform_metric_map`):
   include paid views and exist only for Reels, so they are never compared with insights `views`
   (`meta_views`), even on the same account.
 - Facebook reactions (`fb_reactions`) and Instagram likes (`likes`) are different classes.
+- **YouTube subscribers** (`statistics.subscriberCount`) are `yt_subscribers_rounded`, not
+  `audience_size`: YouTube rounds them to 3 significant figures, so they are never ranked against
+  exact follower counts.
+- YouTube channel views are `yt_channel_views` (lifetime) and video views are `yt_public_views`.
+  Neither is compared with Instagram or connected views.
+- YouTube likes and comments share `likes` and `comments`; video count is `posts_total`.
 - A metric with no mapping, such as an imported LinkedIn impression, gets the class
   `<platform>:<metric>` and is only compared within that platform.
 
@@ -126,3 +132,19 @@ interpolated or back-filled. The rules, from [PHASE_3_PLAN.md](PHASE_3_PLAN.md) 
 - **Public engagement per post:** likes plus comments at a fixed post age (7 days by default), median
   and mean, with the post count. Posts with hidden likes are excluded, and the count says so.
 - **Comparisons** follow the rule in §5.
+
+## 7. Benchmarks
+
+Benchmarks (`lib/analytics/benchmark.ts`) rank profiles with the same rules as §6:
+
+- **One platform and one data source at a time.** Derived metrics have platform-specific
+  comparability classes, so profiles on different platforms are never ranked together.
+- **Every ranking states its basis:** metric, period, data source, platform and set.
+- **No value, no rank.** A profile without a comparable value is listed as "Not ranked" with the
+  reason (not enough observations, post history starts later, too few posts measured, likes hidden by
+  owner, paused, not comparable). It is never ranked as 0.
+- **Posts per week** ranks only profiles whose post history covers the whole period.
+- **Engagement** needs at least 5 posts measured at 7 days old.
+- **Followers** is the last observation inside the period.
+- **Country vs country** shows medians with how many profiles each rests on; **period comparisons**
+  use equal-length periods and only profiles with a value in both.

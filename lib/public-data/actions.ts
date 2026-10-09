@@ -9,14 +9,15 @@ import { createClient } from '@/lib/db/server';
 import { formDataToObject, type FormState } from '@/lib/forms';
 import { getOrgContext } from '@/lib/orgs/queries';
 import { PlatformError, RateLimitError } from '@/lib/platforms/errors';
-import { INSTAGRAM_USERNAME, normalizeHandle } from '@/lib/platforms/meta/business-discovery';
-import { createPublicCollector } from '@/lib/platforms/registry';
+import { createPublicCollector, needsViewer } from '@/lib/platforms/registry';
 import { metaConfig, serverEnv } from '@/lib/server-env';
 import { loadPublicContext } from '@/lib/sync/credentials';
 import {
   BUSINESS_ROLE_VALUES,
   LOOKUPS_PER_HOUR,
+  PUBLIC_PROFILE_PLATFORMS,
   parseHandleList,
+  publicPlatform,
   type LookupState,
 } from './shared';
 
@@ -78,19 +79,24 @@ export async function lookupPublicProfile(
       message: 'The DEMO organization does not read live data. Create your own organization.',
     };
   }
-  const handle = normalizeHandle(field(formData, 'handle'));
-  if (!INSTAGRAM_USERNAME.test(handle)) {
-    return {
-      status: 'error',
-      message: 'Enter an Instagram username: letters, numbers, periods and underscores.',
-    };
-  }
+  const platform = publicPlatform(field(formData, 'platform'));
+  const rules = PUBLIC_PROFILE_PLATFORMS[platform];
+  const handle = rules.normalize(field(formData, 'handle'));
+  if (!rules.isValid(handle)) return { status: 'error', message: rules.invalidMessage };
   const env = serverEnv();
   const meta = metaConfig(env);
-  if (!meta || !env.SCOPIE_ENCRYPTION_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) {
+  const ready =
+    platform === 'youtube'
+      ? Boolean(env.YOUTUBE_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY)
+      : Boolean(meta && env.SCOPIE_ENCRYPTION_KEY && env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!ready) {
     return {
       status: 'error',
-      message: 'Reading public profiles isn’t set up on this server yet (Meta app missing).',
+      handle,
+      message:
+        platform === 'youtube'
+          ? 'Reading YouTube channels isn’t set up on this server yet (YouTube API key missing).'
+          : 'Reading public profiles isn’t set up on this server yet (Meta app missing).',
     };
   }
 
@@ -110,22 +116,25 @@ export async function lookupPublicProfile(
   }
 
   try {
-    const ctx = await loadPublicContext(admin, org.id, 'instagram', env.SCOPIE_ENCRYPTION_KEY);
+    const ctx = needsViewer(platform)
+      ? await loadPublicContext(admin, org.id, platform, env.SCOPIE_ENCRYPTION_KEY!)
+      : { viewerId: null, credential: env.YOUTUBE_API_KEY! };
     await admin.from('public_profile_lookups').insert({
       organization_id: org.id,
       requested_by: user.id,
-      platform_key: 'instagram',
+      platform_key: platform,
     });
-    const collector = createPublicCollector('instagram', {
-      version: meta.version,
-      appSecret: meta.appSecret,
+    const collector = createPublicCollector(platform, {
+      version: meta?.version,
+      appSecret: meta?.appSecret,
     })!;
     const { profile, accountMetrics } = await collector.lookupProfile(ctx, handle);
     const value = (key: string) =>
       accountMetrics.find((metric) => metric.metricKey === key)?.value ?? null;
     return {
       status: 'success',
-      handle: profile.username,
+      // YouTube's customUrl can differ from the handle typed; keep the handle that was found.
+      handle: platform === 'youtube' ? handle : profile.username,
       preview: {
         externalId: profile.externalId,
         username: profile.username,
@@ -160,12 +169,9 @@ export async function lookupPublicProfile(
 }
 
 const addSchema = z.object({
-  handle: z.string().regex(INSTAGRAM_USERNAME, 'Enter a valid Instagram username'),
+  handle: z.string().min(1).max(120),
   displayName: z.string().trim().min(1).max(120),
-  externalId: z
-    .string()
-    .regex(/^\d{1,30}$/)
-    .optional(),
+  externalId: z.string().max(64).optional(),
   businessRole: z.enum(BUSINESS_ROLE_VALUES),
   countryCode: z
     .string()
@@ -174,7 +180,7 @@ const addSchema = z.object({
     .pipe(z.string().length(2).nullable()),
 });
 
-/** Saves a public Instagram profile. The first observation is made by the next sync. */
+/** Saves a public Instagram profile or YouTube channel. The first observation is made by the next sync. */
 export async function addPublicProfile(
   orgSlug: string,
   _prev: LookupState,
@@ -183,9 +189,16 @@ export async function addPublicProfile(
   const { org, role } = await getOrgContext(orgSlug);
   if (!can(role, 'accounts.manage')) return { status: 'error', message: NO_PERMISSION };
   const raw = formDataToObject(formData);
+  const platform = publicPlatform(raw.platform ?? '');
+  const rules = PUBLIC_PROFILE_PLATFORMS[platform];
+  const handle = rules.normalize(raw.handle ?? '');
+  if (!rules.isValid(handle)) return { status: 'error', message: rules.invalidMessage };
+  if (raw.externalId && !rules.externalId.test(raw.externalId)) {
+    return { status: 'error', message: 'Preview the profile again, then save.' };
+  }
   const parsed = addSchema.safeParse({
-    handle: normalizeHandle(raw.handle ?? ''),
-    displayName: raw.displayName || normalizeHandle(raw.handle ?? ''),
+    handle,
+    displayName: raw.displayName || handle,
     externalId: raw.externalId || undefined,
     businessRole: raw.businessRole,
     countryCode: raw.countryCode ?? '',
@@ -198,13 +211,13 @@ export async function addPublicProfile(
     .from('social_accounts')
     .insert({
       organization_id: org.id,
-      platform_key: 'instagram',
+      platform_key: platform,
       handle: parsed.data.handle,
       display_name: parsed.data.displayName,
       external_id: parsed.data.externalId ?? null,
       business_role: parsed.data.businessRole,
       country_code: parsed.data.countryCode,
-      account_type: 'business',
+      account_type: rules.accountType,
     })
     .select('id')
     .single();
@@ -242,7 +255,8 @@ export async function addPublicProfilesInBulk(
   const file = formData.get('file');
   const text =
     file instanceof File && file.size > 0 ? await file.text() : field(formData, 'handles');
-  const { handles, invalid } = parseHandleList(text);
+  const platform = publicPlatform(field(formData, 'platform'));
+  const { handles, invalid } = parseHandleList(text, platform);
   if (!handles.length && !invalid.length) {
     return { status: 'error', message: 'Paste usernames or choose a CSV file.' };
   }
@@ -256,12 +270,12 @@ export async function addPublicProfilesInBulk(
   for (const { handle, countryCode } of handles) {
     const { error } = await supabase.from('social_accounts').insert({
       organization_id: org.id,
-      platform_key: 'instagram',
+      platform_key: platform,
       handle,
       display_name: handle,
       business_role: businessRole.data,
       country_code: countryCode,
-      account_type: 'business',
+      account_type: PUBLIC_PROFILE_PLATFORMS[platform].accountType,
     });
     if (!error) added.push(handle);
     else

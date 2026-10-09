@@ -4,7 +4,7 @@
 
 Scopie is an open-source platform for social media analytics, cross-market benchmarking, content planning, review and approval, and evidence-based AI recommendations. It starts as an internal tool for a marketing team managing ~30 social accounts across countries (CANNA Corporate), and is built multi-tenant so any organization can run it.
 
-> **Status: Phase 3 (public profile intelligence).** Track any public Instagram business or creator account, including competitors, by username, with no login from the account owner. Scopie observes them every day through Meta's official API and builds its own history. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Benchmarking, content, approvals and AI are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phase 4 (benchmarking + YouTube).** Track any public Instagram business or creator account or public YouTube channel, including competitors, by username or handle, with no login from the account owner. Scopie observes them every day through the platforms' official APIs, builds its own history, and ranks profiles only on numbers that are comparable. Connecting your own accounts (Meta connector), scheduled sync, CSV import and a first dashboard work. Content, approvals and AI are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Why Scopie exists
 
@@ -34,8 +34,10 @@ Marketing teams running many accounts across countries and platforms end up with
 | Profile page: coverage line, follower observations, recent posts with PUBLIC / CONNECTED / IMPORTED / DEMO labels, sync history, "Sync now" | Working                                                                                                         |
 | Dashboard and analytics from stored observations                                                                                            | Working (`lib/analytics`)                                                                                       |
 | DEMO seed data, including DEMO posts, metrics and DEMO public competitor profiles                                                           | Working (`pnpm db:seed`)                                                                                        |
+| Public YouTube channels by handle or link, with only a server API key (no OAuth)                                                            | Working once `YOUTUBE_API_KEY` is set (see [PUBLIC_DATA_SETUP.md](docs/PUBLIC_DATA_SETUP.md#youtube))           |
+| Benchmarks: rankings with their basis, country vs country, this period vs the previous one; benchmark groups                                | Working                                                                                                         |
 | Inviting members by email                                                                                                                   | Not yet                                                                                                         |
-| Benchmarks, YouTube public data, content, calendar, approvals, strategy, reports, AI                                                        | Not yet. Placeholder pages say "Coming in a future phase."                                                      |
+| Content, calendar, approvals, strategy, reports, AI                                                                                         | Not yet. Placeholder pages say "Coming in a future phase."                                                      |
 
 ## Architecture
 

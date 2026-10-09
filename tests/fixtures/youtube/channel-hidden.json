@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "id": "UCfixture000000000000002",
+      "snippet": { "title": "Hidden Subs (fixture)" },
+      "statistics": { "viewCount": "100", "hiddenSubscriberCount": true, "videoCount": "3" },
+      "contentDetails": { "relatedPlaylists": { "uploads": "UUfixture000000000000002" } }
+    }
+  ]
+}

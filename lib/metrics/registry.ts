@@ -158,6 +158,13 @@ export const PLATFORM_METRIC_MAP: readonly PlatformMetricMapping[] = [
   pm('instagram', 'post', 'business_discovery.comments_count', 'comments', 'comments'),
   // Includes paid views, so never compared with the insights "views".
   pm('instagram', 'post', 'business_discovery.view_count', 'views', 'ig_public_reel_views'),
+  // Public YouTube data (API key). Subscriber counts are rounded by YouTube.
+  pm('youtube', 'account', 'statistics.subscriberCount', 'followers', 'yt_subscribers_rounded'),
+  pm('youtube', 'account', 'statistics.videoCount', 'posts_total', 'posts_total'),
+  pm('youtube', 'account', 'statistics.viewCount', 'views', 'yt_channel_views'),
+  pm('youtube', 'post', 'statistics.viewCount', 'views', 'yt_public_views'),
+  pm('youtube', 'post', 'statistics.likeCount', 'likes', 'likes'),
+  pm('youtube', 'post', 'statistics.commentCount', 'comments', 'comments'),
   pm('facebook', 'account', 'followers_count', 'followers', 'audience_size'),
   pm('facebook', 'account', 'page_impressions_unique', 'reach', 'meta_reach'),
   pm('facebook', 'account', 'page_post_engagements', 'interactions', 'fb_page_engagements'),

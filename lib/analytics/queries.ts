@@ -1,5 +1,6 @@
 import 'server-only';
 import { createClient, type ServerClient } from '@/lib/db/server';
+import type { BenchmarkProfileData } from './benchmark';
 import { comparisonSource, postSources } from './compare';
 import { buildDashboard, type DashboardModel } from './dashboard';
 import { ENGAGEMENT_AGE_DAYS } from './engagement';
@@ -230,4 +231,78 @@ async function loadSnapshots(
     website: s.website,
     dataSource: s.data_source,
   }));
+}
+
+export type BenchmarkData = {
+  source: ReturnType<typeof comparisonSource>;
+  /** Every profile in the organization, active or not. */
+  profiles: ProfileRecord[];
+  /** Stored observations per profile, of the comparison source. */
+  data: Map<string, BenchmarkProfileData>;
+};
+
+/**
+ * Loads what benchmarks need for this period and the previous period of equal length:
+ * profiles, follower observations and posts with likes + comments at 7 days old. Runs as
+ * the signed-in user (RLS applies) and reads only the organization's comparison source.
+ */
+export async function loadBenchmarkData(input: {
+  orgId: string;
+  isDemoOrg: boolean;
+  days: number;
+  now: Date;
+}): Promise<BenchmarkData> {
+  const supabase = await createClient();
+  const source = comparisonSource(input.isDemoOrg);
+  const { previous } = periodsFor(input.now, input.days);
+  const since = new Date(previous.start.getTime() - ENGAGEMENT_AGE_DAYS * DAY_MS);
+
+  const accounts = await supabase
+    .from('social_accounts')
+    .select(
+      'id, display_name, handle, platform_key, business_role, access_type, country_code, is_active, first_observed_at, last_observed_at, earliest_post_at',
+    )
+    .eq('organization_id', input.orgId)
+    .order('display_name');
+  if (accounts.error) throw accounts.error;
+  const profiles: ProfileRecord[] = accounts.data.map((a) => ({
+    id: a.id,
+    name: a.display_name,
+    handle: a.handle,
+    platformKey: a.platform_key,
+    businessRole: a.business_role,
+    accessType: a.access_type,
+    countryCode: a.country_code,
+    isActive: a.is_active,
+    firstObservedAt: a.first_observed_at,
+    lastObservedAt: a.last_observed_at,
+    earliestPostAt: a.earliest_post_at,
+  }));
+
+  const [followers, posts] = await Promise.all([
+    loadFollowers(supabase, input.orgId, source, previous.start.toISOString().slice(0, 10)),
+    loadPosts(supabase, input.orgId, input.isDemoOrg, since),
+  ]);
+  await attachMetricsAtAge(supabase, input.orgId, source, since, posts);
+
+  const postsByAccount = new Map<string, PostRecord[]>();
+  for (const post of posts) {
+    const list = postsByAccount.get(post.accountId) ?? [];
+    list.push(post);
+    postsByAccount.set(post.accountId, list);
+  }
+  return {
+    source,
+    profiles,
+    data: new Map(
+      profiles.map((profile) => [
+        profile.id,
+        {
+          profile,
+          followers: followers.get(profile.id) ?? [],
+          posts: postsByAccount.get(profile.id) ?? [],
+        },
+      ]),
+    ),
+  };
 }

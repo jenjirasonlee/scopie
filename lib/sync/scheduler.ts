@@ -1,5 +1,5 @@
 import type { Db } from '@/lib/ingest/ingest';
-import { hasConnector, hasPublicCollector } from '@/lib/platforms/registry';
+import { hasConnector, hasPublicCollector, needsViewer } from '@/lib/platforms/registry';
 import { runSyncJob, type EngineDeps, type RunOutcome } from './engine';
 import {
   CONNECTED_JOBS,
@@ -18,7 +18,11 @@ type DueAccount = { id: string; organization_id: string; platform_key: string };
  * so it can be compared with competitors on the same public numbers. Safe to call as often
  * as you like: the database allows one queued or running job per account and job type.
  */
-export async function enqueueDueJobs(db: Db, now: Date = new Date()): Promise<number> {
+export async function enqueueDueJobs(
+  db: Db,
+  now: Date = new Date(),
+  options: { apiKeyPlatforms?: readonly string[] } = {},
+): Promise<number> {
   const { data: connected, error } = await db
     .from('social_accounts')
     .select('id, organization_id, platform_key, platform_connections!inner(status)')
@@ -31,22 +35,25 @@ export async function enqueueDueJobs(db: Db, now: Date = new Date()): Promise<nu
     .from('public_data_viewers')
     .select('organization_id, platform_key');
   if (viewerError) throw new Error(`Could not list viewer accounts: ${viewerError.message}`);
+  // Viewer platforms (Instagram) need an org's viewer; key platforms (YouTube) a server key.
+  const keyPlatforms = (options.apiKeyPlatforms ?? []).filter((key) => !needsViewer(key));
   let publicProfiles: DueAccount[] = [];
-  if (viewers.length) {
+  if (viewers.length || keyPlatforms.length) {
     const { data, error: publicError } = await db
       .from('social_accounts')
       .select('id, organization_id, platform_key, platforms!inner(public_data_status)')
       .eq('is_active', true)
       .not('handle', 'is', null)
       .neq('access_type', 'demo')
-      .eq('platforms.public_data_status', 'available')
-      .in('organization_id', [...new Set(viewers.map((viewer) => viewer.organization_id))]);
+      .eq('platforms.public_data_status', 'available');
     if (publicError) throw new Error(`Could not list public profiles: ${publicError.message}`);
     const hasViewer = new Set(viewers.map((v) => `${v.organization_id}:${v.platform_key}`));
     publicProfiles = data.filter(
       (account) =>
         hasPublicCollector(account.platform_key) &&
-        hasViewer.has(`${account.organization_id}:${account.platform_key}`),
+        (needsViewer(account.platform_key)
+          ? hasViewer.has(`${account.organization_id}:${account.platform_key}`)
+          : keyPlatforms.includes(account.platform_key)),
     );
   }
 

@@ -2,8 +2,9 @@
 
 > A step-by-step guide for marketers, no coding needed. Last updated: 2026-10-07
 
-This guide sets Scopie up to follow public Instagram profiles, such as competitors, industry accounts
-and creators. The profiles you track don't approve anything and never know you follow them in
+This guide sets Scopie up to follow public Instagram profiles and YouTube channels, such as
+competitors, industry accounts and creators. YouTube is much simpler: see [YouTube](#youtube) at the
+end. The profiles you track don't approve anything and never know you follow them in
 Scopie.
 
 You do this once. After that, adding a competitor takes a username and one click.
@@ -162,6 +163,53 @@ Meta's own pages:
 | "Instagram has no business or creator account …"                   | Check the spelling. Personal and age-restricted accounts can't be read.                                              |
 | "Your organization has used its 30 profile previews for this hour" | Add the profile without a preview, or wait an hour.                                                                  |
 | A profile's sync says the username belongs to a different account  | The username was taken over by someone else. Check the username; Scopie stored nothing for it.                       |
+| "Reading YouTube channels isn’t set up on this server yet"         | The server has no YouTube API key yet. See [YouTube](#youtube).                                                      |
+| "YouTube has no public channel …"                                  | Check the handle, or paste the channel link instead.                                                                 |
+
+## YouTube
+
+YouTube needs no Meta app, no viewer account and no permission from anyone: one API key on the
+server is enough.
+
+### Get a YouTube API key (about 5 minutes)
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and sign in with a Google
+   account. Create a project, for example "Scopie".
+2. Open **APIs & Services → Library**, search for **YouTube Data API v3** and click **Enable**.
+3. Open **APIs & Services → Credentials → Create credentials → API key**.
+4. Click the new key and, under **API restrictions**, choose **Restrict key** and tick only
+   **YouTube Data API v3**. Save.
+5. Give the key to whoever runs the Scopie server. They put it in `YOUTUBE_API_KEY` on the server
+   (never in the app's public settings). Don't paste it in chat or email if you can avoid it.
+
+**Settings → Public data** then shows YouTube as **Ready**.
+
+### Add channels
+
+On **Accounts → Add profile**, choose **YouTube** and type the channel's handle (`@brandname`) or
+paste a channel link. **Preview** shows the channel before you save it. Bulk add works the same way:
+pick YouTube as the platform.
+
+### What can and can't be tracked
+
+| Scopie tracks                                       | Scopie can't track                     |
+| --------------------------------------------------- | -------------------------------------- |
+| Subscribers, from the day you add the channel       | Exact subscriber numbers (see below)   |
+| Number of videos and total channel views            | Watch time, retention, traffic sources |
+| Channel description, with changes recorded          | Audience demographics                  |
+| Videos: link, title, description, date and hashtags | Whether a video is a Short             |
+| Views, likes and comments per video                 | Subscriber history before you added it |
+
+- **YouTube rounds subscriber counts** to 3 significant figures (21,345 shows as 21,300). Small
+  changes don't show until the rounded number moves, so Scopie never compares these with exact
+  follower counts.
+- **Hidden likes and turned-off comments show as "hidden by owner"**, never as zero.
+- A channel that hides its subscriber count shows "hidden by owner" too.
+
+### Limits
+
+Google gives each project 10,000 units a day, and each read costs 1 unit. 30 channels use well under
+a tenth of that. If the limit is reached, Scopie waits and tries again later.
 
 Before using Scopie for competitor monitoring at CANNA, a short legal or privacy check is
 recommended.
