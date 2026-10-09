@@ -8,7 +8,7 @@ import { createClient } from '@/lib/db/server';
 import { notificationHref } from '@/lib/notifications/shared';
 import { getOrgContext } from '@/lib/orgs/queries';
 
-/** Marks a notification read and opens the content it is about. */
+/** Marks a notification read and opens the content (or report) it is about. */
 export async function openNotification(orgSlug: string, formData: FormData): Promise<void> {
   const { org } = await getOrgContext(orgSlug);
   const id = z.uuid().safeParse(formData.get('notificationId'));
@@ -17,7 +17,7 @@ export async function openNotification(orgSlug: string, formData: FormData): Pro
   // Row Level Security only shows people their own notifications.
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, kind, content_item_id, read_at')
+    .select('id, kind, content_item_id, report_id, read_at')
     .eq('organization_id', org.id)
     .eq('id', id.data)
     .maybeSingle();
@@ -35,6 +35,7 @@ export async function openNotification(orgSlug: string, formData: FormData): Pro
     notificationHref(orgSlug, {
       kind: data.kind as NotificationKind,
       itemId: data.content_item_id,
+      reportId: data.report_id,
     }) ?? `/${orgSlug}/notifications`,
   );
 }

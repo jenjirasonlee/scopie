@@ -31,6 +31,8 @@ const serverEnvSchema = z.object({
   AI_MODEL_INSIGHTS: z.string().min(1).max(100).optional(),
   /** Analyses per organization per day that may call the model (default 20). */
   AI_MAX_RUNS_PER_DAY: z.coerce.number().int().min(0).max(1000).optional(),
+  /** Shared secret the Monday report schedule sends to the app. At least 32 characters. */
+  REPORTS_CRON_SECRET: z.string().min(32).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -62,6 +64,7 @@ export function serverEnv(): ServerEnv {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     AI_MODEL_INSIGHTS: process.env.AI_MODEL_INSIGHTS,
     AI_MAX_RUNS_PER_DAY: process.env.AI_MAX_RUNS_PER_DAY,
+    REPORTS_CRON_SECRET: process.env.REPORTS_CRON_SECRET,
   });
 }
 

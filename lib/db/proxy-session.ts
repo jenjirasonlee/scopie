@@ -2,7 +2,14 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from './types';
 
-const PUBLIC_PATHS = ['/sign-in', '/sign-up', '/auth/confirm', '/auth/error'];
+// /api/reports/weekly is called by the schedule, not a person; it checks its own secret.
+const PUBLIC_PATHS = [
+  '/sign-in',
+  '/sign-up',
+  '/auth/confirm',
+  '/auth/error',
+  '/api/reports/weekly',
+];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

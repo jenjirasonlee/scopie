@@ -9,6 +9,7 @@ import {
   formatNotificationTime,
   notificationHref,
 } from '@/lib/notifications/shared';
+import { reportReadyText } from '@/lib/reports/shared';
 import { cn } from '@/lib/utils';
 
 /** Notifications, newest first. Opening an unread one marks it read. */
@@ -49,25 +50,27 @@ export function NotificationList({
                 className={cn('text-[13px]', unread ? 'text-foreground' : 'text-muted-foreground')}
               >
                 {unread ? <span className="sr-only">Unread: </span> : null}
-                <span className="text-foreground font-medium">{n.actorName ?? 'Someone'}</span>{' '}
-                {NOTIFICATION_TEXT[n.kind]}{' '}
-                {!href ? (
-                  <span className="italic">{title}</span>
-                ) : unread ? (
-                  <button
-                    type="submit"
-                    form={formId}
-                    className="text-foreground cursor-pointer text-left font-medium hover:underline"
-                  >
-                    {title}
-                  </button>
+                {n.kind === 'report_ready' ? (
+                  <>
+                    <Target href={href} formId={formId} unread={unread}>
+                      {reportReadyText(n.reportWeek)}
+                    </Target>
+                    {n.actorName ? (
+                      <span className="text-muted-foreground"> · made by {n.actorName}</span>
+                    ) : null}
+                  </>
                 ) : (
-                  <Link href={href} className="text-foreground font-medium hover:underline">
-                    {title}
-                  </Link>
+                  <>
+                    <span className="text-foreground font-medium">{n.actorName ?? 'Someone'}</span>{' '}
+                    {NOTIFICATION_TEXT[n.kind]}{' '}
+                    <Target href={href} formId={formId} unread={unread}>
+                      {title}
+                    </Target>
+                  </>
                 )}
               </p>
-              {n.excerpt ? (
+              {/* A report notification's excerpt is its title, which the line above already says. */}
+              {n.excerpt && n.kind !== 'report_ready' ? (
                 <p className="text-muted-foreground mt-0.5 line-clamp-2 text-[13px] break-words">
                   “{n.excerpt}”
                 </p>
@@ -95,5 +98,39 @@ export function NotificationList({
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * What the notification is about: a button that marks it read and opens it while unread, a
+ * plain link once read, and plain text when there is nothing left to open.
+ */
+function Target({
+  href,
+  formId,
+  unread,
+  children,
+}: {
+  href: string | null;
+  formId: string;
+  unread: boolean;
+  children: React.ReactNode;
+}) {
+  if (!href) return <span className="italic">{children}</span>;
+  if (unread) {
+    return (
+      <button
+        type="submit"
+        form={formId}
+        className="text-foreground cursor-pointer text-left font-medium hover:underline"
+      >
+        {children}
+      </button>
+    );
+  }
+  return (
+    <Link href={href} className="text-foreground font-medium hover:underline">
+      {children}
+    </Link>
   );
 }

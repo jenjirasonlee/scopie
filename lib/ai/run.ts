@@ -4,6 +4,7 @@ import { distinctNames } from '@/lib/analytics/names';
 import { loadBenchmarkData } from '@/lib/analytics/queries';
 import { periodsFor } from '@/lib/analytics/range';
 import { createAdminClient } from '@/lib/db/admin';
+import type { ServerClient } from '@/lib/db/server';
 import type { Json } from '@/lib/db/types';
 import { serverEnv } from '@/lib/server-env';
 import { measureStrategy } from '@/lib/strategy/measure';
@@ -42,6 +43,7 @@ async function loadSignalInput(input: {
   isDemoOrg: boolean;
   timeZone: string;
   now: Date;
+  db?: ServerClient;
 }): Promise<SignalInput> {
   const periods = periodsFor(input.now, ANALYSIS_DAYS);
   const data = await loadBenchmarkData({
@@ -49,14 +51,15 @@ async function loadSignalInput(input: {
     isDemoOrg: input.isDemoOrg,
     days: ANALYSIS_DAYS,
     now: input.now,
+    db: input.db,
   });
   const today = todayIn(input.timeZone, input.now);
-  const running = (await listStrategies(input.orgId)).filter(
+  const running = (await listStrategies(input.orgId, input.db)).filter(
     (s) => s.status === 'active' && periodState(s.periodStart, s.periodEnd, today) === 'running',
   );
   const strategies = [];
   for (const summary of running) {
-    const strategy = await getStrategy(input.orgId, summary.id);
+    const strategy = await getStrategy(input.orgId, summary.id, input.db);
     if (!strategy?.pillars.length) continue;
     const { coverage } = await measureStrategy({
       orgId: input.orgId,
@@ -64,6 +67,7 @@ async function loadSignalInput(input: {
       timeZone: input.timeZone,
       now: input.now,
       strategy: { ...strategy, objectives: [] },
+      db: input.db,
     });
     strategies.push({ id: strategy.id, name: strategy.name, coverage });
   }
@@ -84,8 +88,14 @@ export async function runAnalysis(input: {
   orgSlug: string;
   isDemoOrg: boolean;
   timeZone: string;
-  userId: string;
+  /** null for scheduled runs. */
+  userId: string | null;
   now?: Date;
+  /**
+   * Reads the data as this client. Defaults to the signed-in user (RLS applies); scheduled
+   * jobs pass the service role, and every query is scoped to orgId.
+   */
+  db?: ServerClient;
 }): Promise<{ status: 'ok'; runId: string } | { status: 'error'; message: string }> {
   const setup = analysisSetup();
   if (!setup.canRun) {

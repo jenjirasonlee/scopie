@@ -229,6 +229,9 @@ export type NotificationItem = {
   kind: NotificationKind;
   itemId: string | null;
   itemTitle: string | null;
+  /** Set on report_ready notifications. */
+  reportId: string | null;
+  reportWeek: { start: string; end: string } | null;
   actorName: string | null;
   excerpt: string | null;
   readAt: string | null;
@@ -241,7 +244,7 @@ export async function listNotifications(orgId: string, limit = 50): Promise<Noti
   const { data, error } = await supabase
     .from('notifications')
     .select(
-      'id, kind, content_item_id, excerpt, read_at, created_at, actor:profiles!notifications_actor_id_fkey(full_name, email), content_items(title)',
+      'id, kind, content_item_id, report_id, excerpt, read_at, created_at, actor:profiles!notifications_actor_id_fkey(full_name, email), content_items(title), reports(period_start, period_end)',
     )
     .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
@@ -252,6 +255,10 @@ export async function listNotifications(orgId: string, limit = 50): Promise<Noti
     kind: row.kind as NotificationKind,
     itemId: row.content_item_id,
     itemTitle: row.content_items?.title ?? null,
+    reportId: row.report_id,
+    reportWeek: row.reports
+      ? { start: row.reports.period_start, end: row.reports.period_end }
+      : null,
     actorName: nameOf(row.actor),
     excerpt: row.excerpt,
     readAt: row.read_at,

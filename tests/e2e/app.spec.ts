@@ -608,3 +608,32 @@ test('managers run an analysis without an AI key; viewers read it', async ({ bro
   ).toBeVisible();
   await expect(viewerPage.getByRole('button', { name: /Run analysis/ })).toHaveCount(0);
 });
+
+test('managers make last week’s report; viewers are told and read it', async ({ browser }) => {
+  const manager = await createUser('e2e-reporter');
+  const viewer = await createUser('e2e-report-reader');
+  const org = await createOrg(manager, 'Reports Org');
+  await addMember(org.id, viewer, 'VIEWER');
+
+  const managerPage = await (await browser.newContext()).newPage();
+  await signIn(managerPage, manager.email);
+  await managerPage.goto(`/${org.slug}/reports`);
+  await managerPage.getByRole('button', { name: 'Make last week’s report' }).click();
+  await expect(managerPage).toHaveURL(new RegExp(`/${org.slug}/reports/[0-9a-f-]{36}$`));
+  await expect(managerPage.getByRole('heading', { name: /^Weekly report, / })).toBeVisible();
+  // A new organization has no profiles: numbers say N/A with a reason, never 0.
+  await expect(managerPage.getByText('Nothing to report: no own profiles to rank.')).toBeVisible();
+  await expect(managerPage.getByText('N/A').first()).toBeVisible();
+  const reportUrl = managerPage.url();
+
+  const viewerPage = await (await browser.newContext()).newPage();
+  await signIn(viewerPage, viewer.email);
+  await viewerPage.goto(`/${org.slug}/notifications`);
+  await viewerPage.getByText(/Weekly report for .* is ready/).click();
+  await expect(viewerPage).toHaveURL(reportUrl);
+  await viewerPage.goto(`/${org.slug}/reports`);
+  await expect(viewerPage.getByRole('button', { name: 'Make last week’s report' })).toHaveCount(0);
+  await expect(
+    viewerPage.getByRole('link', { name: /Weekly report, |Sept|Oct/ }).first(),
+  ).toBeVisible();
+});

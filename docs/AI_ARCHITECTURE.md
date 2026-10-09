@@ -1,6 +1,6 @@
 # Scopie — AI Architecture
 
-> Status: insights and recommendations built in Phase 8 (§10); weekly report, chat and content assistant still design. Last updated: 2026-10-08
+> Status: insights and recommendations built in Phase 8 (§10); weekly report built in Phase 9 (§5); chat and content assistant still design. Last updated: 2026-10-09
 
 ## 1. Principles
 
@@ -128,6 +128,8 @@ Actions: accept → creates an IDEA content item (`source_recommendation_id`) or
 
 Assembled mostly deterministically: KPI section, top markets (ranked by a named metric), top content, from analytics. The LLM writes only the narrative sections (key insights, opportunities, recommended actions, risks) from that week's validated insights and recommendations. Report stores a `data_snapshot` so numbers never change after generation.
 
+**Built (Phase 9):** `lib/reports/build.ts` assembles the report from `lib/analytics` (KPIs, markets and competitors ranked by follower growth rate, top content by likes + comments at 7 days) and Scopie data (content published, review decisions, running strategies). The narrative sections are not written by a separate model call: the report quotes the insights and open recommendations of the latest analysis (from the last 24 hours, or a new one it runs), which were already checked as described in §10, so the report adds no new model text. The first three insights are the key insights; the rest are split into opportunities and risks by kind; up to three open recommendations are the recommended actions. The whole report is saved as one snapshot (`reports.snapshot`). Generation: `lib/reports/generate.ts`; schedule: `trigger/reports.ts`.
+
 ## 6. Scopie AI chat (post-V1)
 
 Tool-calling agent over **read-only, org-scoped analytics tools**. The model never writes SQL.
@@ -171,4 +173,4 @@ Ideas, captions, hooks, repurposing, platform adaptations, briefs. Grounded in: 
 - `lib/ai/rules.ts`: Scopie's own writer, used when no model is configured and as the fallback.
 - `lib/ai/model.ts` and `validate.ts`: the model (OpenAI, strict JSON schema, prompt `insights-v1`) may reword, pick and order insights, and lower confidence one step. Every number must appear in the cited evidence (rounding and percentages allowed), causal and promising wording is refused, unknown signals are dropped. A failed call keeps the rules text for the whole run.
 - `lib/ai/run.ts`: loads data as the user (RLS), saves with the service role, one run per two minutes per organization, `AI_MAX_RUNS_PER_DAY` model runs (default 20).
-- Not built from this design yet: trends and anomaly scores over 8 to 12 weeks, bootstrap intervals, the weekly report engine, chat, the content assistant, per-org AI settings and token budgets, cost tracking.
+- Not built from this design yet: trends and anomaly scores over 8 to 12 weeks, bootstrap intervals, chat, the content assistant, per-org AI settings and token budgets, cost tracking.

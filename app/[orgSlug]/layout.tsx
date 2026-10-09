@@ -16,7 +16,7 @@ export default function OrgLayout({
 }) {
   return (
     <div className="flex min-h-svh">
-      <aside className="bg-sidebar sticky top-0 hidden h-svh w-56 shrink-0 flex-col gap-5 border-r px-3 py-3.5 md:flex">
+      <aside className="bg-sidebar sticky top-0 hidden h-svh w-56 shrink-0 flex-col gap-5 border-r px-3 py-3.5 md:flex print:hidden">
         <Link href="/" className="px-2.5">
           <Logo />
         </Link>
@@ -28,7 +28,7 @@ export default function OrgLayout({
         <Suspense fallback={<TopbarSkeleton />}>
           <Topbar params={params} />
         </Suspense>
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8">
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-8 print:max-w-none print:p-0">
           <Suspense fallback={<PageSkeleton />}>
             <OrgGate params={params}>{children}</OrgGate>
           </Suspense>
