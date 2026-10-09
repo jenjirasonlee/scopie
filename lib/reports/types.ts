@@ -11,7 +11,8 @@ export const REPORT_SNAPSHOT_VERSION = 1;
 export type ReportWeek = { start: string; end: string };
 
 export type ReportKpi = {
-  key: 'followers_gained' | 'posts_published' | 'median_engagement' | 'content_published' | 'reviews';
+  key:
+    'followers_gained' | 'posts_published' | 'median_engagement' | 'content_published' | 'reviews';
   label: string;
   /** null when it couldn't be measured; never 0 for "unknown". */
   value: number | null;
