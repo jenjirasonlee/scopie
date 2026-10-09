@@ -9,6 +9,8 @@ Migrations:
 - `supabase/migrations/20261006000100_tenancy_and_roles.sql` and `…000200_social_accounts.sql` (Phase 1, Foundation)
 - `supabase/migrations/20261007000100_data_pipeline.sql` (Phase 2, Real social data pipeline)
 - `supabase/migrations/20261008000100_public_intelligence.sql` (Phase 3, Public profile intelligence)
+- `supabase/migrations/20261009000100_youtube_public.sql` and `20261010000100_benchmark_group_managers.sql` (Phase 4)
+- `supabase/migrations/20261010000200_content_hub.sql` (Phase 5, Content management + calendar; §6)
 
 Phase 1:
 
@@ -20,7 +22,7 @@ Phase 1:
 | `organization_members`                    | Role per user. Only OWNERs grant/change/remove OWNER. An organization always keeps one owner, except when an owner's whole user account is deleted (the organization is then left ownerless and must be reassigned by an operator). |
 | `platforms`, `countries`                  | Global reference data (8 platforms; ~55 ISO countries).                                                                                                                                                                             |
 | `social_accounts`                         | §4. Users can't set connection fields (trigger). No direct delete: deactivate, or remove with all its data through `remove_profile_and_data()` (§8.2). Owner must be a member. Unique handle per org+platform (case-insensitive).   |
-| `account_groups`, `account_group_members` | `kind` is `region` or `custom` (country uses the account column). No UI yet.                                                                                                                                                        |
+| `account_groups`, `account_group_members` | `kind` is `region` or `custom` (country uses the account column). Custom groups are the benchmark groups (Phase 4); MANAGER+ edit them.                                                                                             |
 | `activity_log`                            | Written by triggers on accounts, memberships, organization updates, platform connections and import batches.                                                                                                                        |
 
 Phase 2:
@@ -97,7 +99,7 @@ Global (not tenant-owned): platforms, platform_account_types, countries,
                            metric_definitions, platform_metric_map
 Read models (views): post_metrics_latest, post_metrics_at_age, account_metrics_daily
 
-Planned: invitations, content_items/versions/reviews, strategies, benchmark_groups,
+Planned: invitations, content reviews and comments, strategies,
          ai_generations/insights/recommendations, reports, notifications
 ```
 
@@ -523,9 +525,17 @@ create table import_batches (
 
 CSV import (`lib/imports/`) runs as the signed-in user (`accounts.manage`, ADMIN+): it creates a batch, writes rows through ingest as `imported`, then finishes the batch. A trigger stops users changing a batch's identity fields or a finished batch. Batches are never deleted.
 
-## 6. Content, approvals, strategy (planned: Phases 5–7)
+## 6. Content, approvals, strategy (content implemented in Phase 5; approvals and strategy planned)
 
-The taxonomy tables already exist in minimal form (§5.3); later phases extend them (e.g. pillar colour, campaign objective) and add `topics`.
+Implemented in `…_content_hub.sql`:
+
+- `content_pillars.color` (a fixed palette). `content_items`, `content_versions`, `content_assets` roughly as sketched below, with composite foreign keys to the organization's own taxonomy rows.
+- Version 1 is created by the database when an item is inserted, and set as `current_version_id`. New versions only through `create_content_version(item_id)`, which copies the text and file rows. No direct version inserts. Only the current, unsubmitted version can change.
+- Until Phase 6, status moves are limited to IDEA ↔ DRAFT, IDEA/DRAFT → ARCHIVED and ARCHIVED → DRAFT, and new items start as IDEA or DRAFT. Items are never deleted, only archived.
+- Asset `storage_path` must start with `org/{organization_id}/content/{content_item_id}/`. Files live in a private Supabase Storage bucket (`content-assets`) or a local folder in development (`ASSET_STORAGE`); the app serves them through `/api/content-assets/{id}` after an RLS check.
+- EDITOR+ write content (`content.edit`), everyone in the organization reads it. Changes are logged to `activity_log`.
+
+Not built yet: `content_comments`, `content_reviews`, `strategy_objective_id`, `source_recommendation_id`, `duration_seconds`.
 
 ```sql
 create type content_status as enum

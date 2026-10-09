@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 4 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 5 is next. Last updated: 2026-10-07
+> Status: Phases 1 to 5 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 6 is next. Last updated: 2026-10-08
 
 ## 1. Product focus
 
@@ -36,8 +36,8 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | — Architecture review ✅                  | Data-layer review; its decisions are built (see [DATA_PIPELINE.md](DATA_PIPELINE.md), [METRICS.md](METRICS.md))                                                                                                                                                                                | Decisions approved                                                                                                  |
 | **2** Real social data pipeline ✅        | Metric dictionary, posts and append-only metric snapshots, shared ingest step, CSV import, Meta connector (Instagram + Facebook) with OAuth, encrypted tokens, scheduled sync, sync health, DEMO posts and metrics                                                                             | A connected account syncs on schedule and on demand; CSV import works; fixture tests for every error path           |
 | **3** Public profile intelligence ✅      | Access type and business role, provenance labels, public Instagram observation via Business Discovery, add profile by username, observation history, public posts and engagement, analytics layer, first dashboard, comparisons, "What changed?" panel. See [PHASE_3_PLAN.md](PHASE_3_PLAN.md) | A competitor added by username is observed daily on a real Meta app; dashboard and insights show only stored values |
-| **4** Benchmarking + YouTube              | Benchmark groups, rankings with their basis, country vs country, period comparisons; YouTube public collector (API key, no Meta needed)                                                                                                                                                        | Rankings exclude non-comparable values; a YouTube channel is observed with no OAuth                                 |
-| **5** Content management + calendar       | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
+| **4** Benchmarking + YouTube ✅           | Benchmark groups, rankings with their basis, country vs country, period comparisons; YouTube public collector (API key, no Meta needed)                                                                                                                                                        | Rankings exclude non-comparable values; a YouTube channel is observed with no OAuth                                 |
+| **5** Content management + calendar ✅    | Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views                                                                                                                                                                                     | Create content with assets and see it on the calendar                                                               |
 | **6** Review + approval                   | State machine, comments and mentions, request changes, approve/reject, history, queue, notifications                                                                                                                                                                                           | Draft → review → changes → approved, end to end                                                                     |
 | **7** Content strategy                    | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
 | **8** AI analyst + recommendations        | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
@@ -105,6 +105,12 @@ Delivered: the YouTube public collector (Data API v3 with a server API key, no O
 
 Not yet verified against the live YouTube API. Every YouTube behaviour is covered by tests against saved responses.
 
-## 10. Next step
+## 10. Phase 5 outcome
 
-**Phase 5: Content management + calendar.** Taxonomy screens (pillars, formats, campaigns, audiences), content items, versions, assets, calendar views.
+Delivered: Settings → Content taxonomy (pillars with a colour, formats, campaigns with dates, audiences, CTA types; add, edit, deactivate). The Content page: list with filters, new content (a title is enough), and an item page with copy, plan, platforms, country, owner and taxonomy. Every save edits the current version; "Start a new version" copies it and keeps the earlier one unchanged. Files (images, videos, PDFs) on each version, stored privately per organization, type checked from the file's bytes (SVG and HTML refused), served only to members. Content is archived, never deleted. The calendar: month, week and list views in the organization's time zone, filters, a details panel, and moving an item to another day by drag or date. Managers can now also edit benchmark groups. DEMO taxonomy and DEMO content items in the seed.
+
+Status moves are limited to Idea, Draft and Archived until the approval flow (Phase 6) exists.
+
+## 11. Next step
+
+**Phase 6: Review + approval.** State machine, comments and mentions, request changes, approve/reject, history, queue, notifications.

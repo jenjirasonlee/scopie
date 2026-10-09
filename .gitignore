@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Trigger.dev local build output
 .trigger
+
+# local content asset files (ASSET_STORAGE=local)
+/.scopie-assets/

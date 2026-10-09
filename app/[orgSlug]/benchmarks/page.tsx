@@ -37,6 +37,7 @@ export default async function BenchmarksPage({
   const metric = parseMetricParam(search.metric);
   const { org, role } = await getOrgContext(orgSlug);
   const canManage = can(role, 'accounts.manage');
+  const canManageGroups = can(role, 'strategy.manage');
   // getOrgContext has already read request data, so the current time is per request.
   const now = new Date();
   const [benchmark, groups, countries] = await Promise.all([
@@ -70,7 +71,7 @@ export default async function BenchmarksPage({
           <Button asChild size="sm" variant="outline">
             <Link href={`/${orgSlug}/benchmarks/groups`}>
               <Users aria-hidden />
-              {canManage ? 'Manage groups' : 'View groups'}
+              {canManageGroups ? 'Manage groups' : 'View groups'}
             </Link>
           </Button>
           {canManage ? (
@@ -161,7 +162,7 @@ export default async function BenchmarksPage({
         <p className="text-muted-foreground text-xs">
           Tip: a benchmark group, such as “Spain competitors”, lets you rank a chosen set of
           profiles.{' '}
-          {canManage ? (
+          {canManageGroups ? (
             <Link
               href={`/${orgSlug}/benchmarks/groups`}
               className="text-primary font-medium hover:underline"
@@ -169,7 +170,7 @@ export default async function BenchmarksPage({
               Create a group
             </Link>
           ) : (
-            'Owners and admins can create groups.'
+            'Owners, admins and managers can create groups.'
           )}
         </p>
       ) : null}

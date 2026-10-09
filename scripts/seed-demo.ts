@@ -9,6 +9,9 @@
  * written through the same ingest step as real data and stored as data_source 'demo'.
  *
  * Everything created here is fictional. No real CANNA accounts, credentials or data.
+ * It also adds a DEMO content taxonomy (pillars, formats, campaigns, audiences, CTA types) and
+ * DEMO content items planned around today, so the content list and calendar have something to show.
+ *
  * Accounts get connection_status 'demo' and data_source 'demo', which the UI labels as DEMO.
  * Safe to re-run: existing demo rows are updated, not duplicated.
  */
@@ -17,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, TablesInsert } from '../lib/db/types';
 import { generateDemoAccount } from '../lib/demo/generate';
 import { ingest } from '../lib/ingest/ingest';
+import { utcToZonedParts, zonedDateTimeToUtc } from '../lib/calendar/time';
 
 config({ path: '.env.local', quiet: true });
 config({ quiet: true });
@@ -369,13 +373,215 @@ async function main() {
     posts += seenPosts.size;
   }
 
+  const content = await seedContent(supabase, org.id, ownerId, teamIds[0]!);
+
   console.log(`Seeded DEMO DATA into "${org.name}" (/${org.slug}/dashboard)`);
   console.log(`  ${accounts.length} demo social accounts (${created} new)`);
   console.log(`  ${posts} DEMO posts and ${facts} new DEMO metric values`);
+  console.log(`  ${content.items} DEMO content items (${content.created} new) and a DEMO taxonomy`);
   console.log(
     `  Sign in as ${DEMO_USER_EMAIL} (owner), ${DEMO_TEAM.map((m) => `${m.email} (${m.role.toLowerCase()})`).join(', ')}`,
   );
   console.log(`  Password: the DEMO_USER_PASSWORD value (default "scopie-demo-password")`);
+}
+
+const DEMO_TAXONOMY = {
+  content_pillars: [
+    { name: 'Grow knowledge (DEMO)', color: 'green' },
+    { name: 'Product stories (DEMO)', color: 'blue' },
+    { name: 'Community (DEMO)', color: 'amber' },
+  ],
+  content_formats: [{ name: 'Reel (DEMO)' }, { name: 'Carousel (DEMO)' }, { name: 'Video (DEMO)' }],
+  campaigns: [{ name: 'Autumn range (DEMO)' }, { name: 'Grower stories (DEMO)' }],
+  audiences: [{ name: 'Hobby growers (DEMO)' }, { name: 'Retailers (DEMO)' }],
+  cta_types: [{ name: 'Find a stockist (DEMO)' }, { name: 'Read the guide (DEMO)' }],
+} as const;
+
+type TaxonomyTable = keyof typeof DEMO_TAXONOMY;
+
+/** Fictional content ideas and drafts. dayOffset is days from today, in the org's time zone. */
+const DEMO_CONTENT: {
+  title: string;
+  status: 'IDEA' | 'DRAFT';
+  platforms: string[];
+  country: string | null;
+  dayOffset: number | null;
+  time?: string;
+  pillar?: number;
+  format?: number;
+  campaign?: number;
+  audience?: number;
+  cta?: number;
+  caption?: string;
+  hashtags?: string[];
+}[] = [
+  {
+    title: 'Autumn feeding tips reel (DEMO)',
+    status: 'DRAFT',
+    platforms: ['instagram', 'tiktok'],
+    country: 'NL',
+    dayOffset: 2,
+    pillar: 0,
+    format: 0,
+    campaign: 0,
+    audience: 0,
+    cta: 1,
+    caption: 'DEMO DATA. Feed little and often as the days get shorter.',
+    hashtags: ['demo', 'growtips'],
+  },
+  {
+    title: 'New range unboxing (DEMO)',
+    status: 'DRAFT',
+    platforms: ['youtube'],
+    country: null,
+    dayOffset: 5,
+    time: '17:00',
+    pillar: 1,
+    format: 2,
+    campaign: 0,
+    cta: 0,
+    caption: 'DEMO DATA. A first look at the autumn range.',
+    hashtags: ['demo'],
+  },
+  {
+    title: 'Grower of the month (DEMO)',
+    status: 'IDEA',
+    platforms: ['instagram', 'facebook'],
+    country: 'ES',
+    dayOffset: 9,
+    pillar: 2,
+    format: 1,
+    campaign: 1,
+    audience: 0,
+  },
+  {
+    title: 'Stockist spotlight carousel (DEMO)',
+    status: 'IDEA',
+    platforms: ['linkedin'],
+    country: 'GB',
+    dayOffset: 14,
+    pillar: 1,
+    format: 1,
+    audience: 1,
+    cta: 0,
+  },
+  {
+    title: 'pH basics explainer (DEMO)',
+    status: 'DRAFT',
+    platforms: ['instagram'],
+    country: 'DE',
+    dayOffset: -3,
+    time: '12:30',
+    pillar: 0,
+    format: 0,
+    cta: 1,
+    caption: 'DEMO DATA. Why pH matters, in 30 seconds.',
+  },
+  {
+    title: 'Behind the scenes at the lab (DEMO)',
+    status: 'IDEA',
+    platforms: ['tiktok'],
+    country: null,
+    dayOffset: null,
+    pillar: 2,
+  },
+];
+
+/** DEMO taxonomy and content items. Safe to re-run: rows are matched by name or title. */
+async function seedContent(
+  supabase: ReturnType<typeof createClient<Database>>,
+  orgId: string,
+  ownerId: string,
+  managerId: string,
+) {
+  const ids = {} as Record<TaxonomyTable, string[]>;
+  for (const table of Object.keys(DEMO_TAXONOMY) as TaxonomyTable[]) {
+    ids[table] = [];
+    for (const row of DEMO_TAXONOMY[table]) {
+      const { data: existing, error: findError } = await supabase
+        .from(table)
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('name', row.name)
+        .maybeSingle();
+      if (findError) throw findError;
+      if (existing) {
+        ids[table].push(existing.id);
+        continue;
+      }
+      const { data, error } = await supabase
+        .from(table)
+        .insert({ ...row, organization_id: orgId, description: 'DEMO DATA.' })
+        .select('id')
+        .single();
+      if (error) throw error;
+      ids[table].push(data.id);
+    }
+  }
+
+  const timeZone = DEMO_ORG.default_timezone;
+  const today = utcToZonedParts(new Date(), timeZone).date;
+  const dayFrom = (offset: number) =>
+    new Date(Date.parse(`${today}T00:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10);
+  const pick = (table: TaxonomyTable, index: number | undefined) =>
+    index === undefined ? null : ids[table][index]!;
+
+  let created = 0;
+  for (const [index, entry] of DEMO_CONTENT.entries()) {
+    const item = {
+      organization_id: orgId,
+      title: entry.title,
+      platform_keys: entry.platforms,
+      country_code: entry.country,
+      owner_user_id: index % 2 === 0 ? ownerId : managerId,
+      pillar_id: pick('content_pillars', entry.pillar),
+      content_format_id: pick('content_formats', entry.format),
+      campaign_id: pick('campaigns', entry.campaign),
+      audience_id: pick('audiences', entry.audience),
+      cta_type_id: pick('cta_types', entry.cta),
+      planned_publish_at:
+        entry.dayOffset === null
+          ? null
+          : zonedDateTimeToUtc(
+              dayFrom(entry.dayOffset),
+              entry.time ?? '09:00',
+              timeZone,
+            ).toISOString(),
+    };
+    const { data: existing, error: findError } = await supabase
+      .from('content_items')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('title', entry.title)
+      .maybeSingle();
+    if (findError) throw findError;
+    let itemId = existing?.id;
+    if (itemId) {
+      const { error } = await supabase.from('content_items').update(item).eq('id', itemId);
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabase
+        .from('content_items')
+        .insert({ ...item, status: entry.status, created_by: ownerId })
+        .select('id')
+        .single();
+      if (error) throw error;
+      itemId = data.id;
+      created += 1;
+      // Version 1 is created by the database; fill in its copy.
+      const { error: versionError } = await supabase
+        .from('content_versions')
+        .update({
+          caption: entry.caption ?? null,
+          hashtags: entry.hashtags ?? [],
+          notes: 'DEMO DATA. Fictional content for local development.',
+        })
+        .eq('content_item_id', itemId)
+        .eq('version_number', 1);
+      if (versionError) throw versionError;
+    }
+  }
+  return { items: DEMO_CONTENT.length, created };
 }
 
 main().catch((error: unknown) => {
