@@ -115,6 +115,8 @@ export async function requestSync(
   revalidatePath(`/${orgSlug}/accounts/${field(formData, 'accountId')}`);
   return {
     status: 'success',
-    message: data ? 'Sync queued. It runs on the next worker pass.' : 'Could not queue a sync.',
+    message: data
+      ? 'Queued. Scopie reads it within 15 minutes; refresh the page then.'
+      : 'Could not queue a sync.',
   };
 }

@@ -15,6 +15,7 @@ import type {
   PublicObservation,
   PublicPostPage,
   PublicProfile,
+  ProfileSearchResult,
   PublicProfileCollector,
   RawPayload,
 } from '../types';
@@ -26,8 +27,9 @@ import type {
  * https://developers.google.com/youtube/v3/docs/channels/list
  * https://developers.google.com/youtube/v3/docs/videos#statistics
  *
- * Quota: each call below costs 1 unit (10,000 units a day by default). An observation costs
- * 3 units: channel, one page of uploads, statistics for that page.
+ * Quota: each call below costs 1 unit (10,000 units a day by default), except a search by
+ * name, which costs 100. An observation costs 3 units: channel, one page of uploads,
+ * statistics for that page.
  */
 
 const PLATFORM = 'youtube';
@@ -46,6 +48,13 @@ export function normalizeYouTubeHandle(raw: string): string {
     .replace(/[/?#].*$/, '')
     .replace(/^@/, '');
 }
+
+/** Quota units a search.list call costs. */
+export const YOUTUBE_SEARCH_UNITS = 100;
+
+const searchSchema = z.object({
+  items: z.array(z.object({ id: z.object({ channelId: z.string().optional() }) })).optional(),
+});
 
 const channelSchema = z.object({
   items: z
@@ -261,6 +270,7 @@ export class YouTubePublicCollector implements PublicProfileCollector {
     resource: string,
     params: Record<string, string>,
     ctx: PublicContext,
+    units = 1,
   ): Promise<unknown> {
     if (!ctx.credential) throw new PlatformError('No YouTube API key is configured', 'no_api_key');
     const url = new URL(`${BASE}/${resource}`);
@@ -271,7 +281,7 @@ export class YouTubePublicCollector implements PublicProfileCollector {
       { method: 'GET', headers: { 'X-Goog-Api-Key': ctx.credential } },
       this.options,
     );
-    this.unitsUsed += 1;
+    this.unitsUsed += units;
     let body: unknown;
     try {
       body = await response.json();
@@ -346,6 +356,46 @@ export class YouTubePublicCollector implements PublicProfileCollector {
       profile: toProfile(channel),
       accountMetrics: totals(channel, new Date().toISOString().slice(0, 10)),
     };
+  }
+
+  /** Channels matching a name: one search (100 units) plus one channels call for the counts. */
+  async searchProfiles(
+    ctx: PublicContext,
+    query: string,
+    limit: number,
+  ): Promise<ProfileSearchResult[]> {
+    const found = parse(
+      searchSchema,
+      await this.get(
+        'search',
+        { part: 'snippet', type: 'channel', q: query, maxResults: String(limit) },
+        ctx,
+        YOUTUBE_SEARCH_UNITS,
+      ),
+      'search',
+    );
+    const ids = (found.items ?? []).flatMap((item) => item.id.channelId ?? []);
+    if (!ids.length) return [];
+    const body = parse(
+      channelSchema,
+      await this.get('channels', { part: 'snippet,statistics', id: ids.join(',') }, ctx),
+      'channel',
+    );
+    const byId = new Map((body.items ?? []).map((channel) => [channel.id, channel]));
+    const asOf = new Date().toISOString().slice(0, 10);
+    // Keep YouTube's relevance order.
+    return ids.flatMap((id) => {
+      const channel = byId.get(id);
+      if (!channel) return [];
+      const profile = toProfile(channel);
+      return {
+        externalId: profile.externalId,
+        username: profile.username,
+        displayName: profile.displayName,
+        profilePictureUrl: profile.profilePictureUrl,
+        followers: totals(channel, asOf).find((metric) => metric.metricKey === 'followers')!.value,
+      };
+    });
   }
 
   async observeProfile(

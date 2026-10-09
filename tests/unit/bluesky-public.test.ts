@@ -256,6 +256,42 @@ describe('Bluesky public collector', () => {
   });
 });
 
+describe('Bluesky profile search', () => {
+  it('finds profiles by name with no key, then reads their public follower counts', async () => {
+    const profile = fixture('profile') as Record<string, unknown>;
+    const hidden = fixture('profile-hidden') as Record<string, unknown>;
+    const bsky = fakeBluesky((url) => {
+      if (url.pathname.endsWith('app.bsky.actor.searchActorsTypeahead'))
+        return {
+          status: 200,
+          body: {
+            actors: [
+              { did: DID, handle: 'examplegrow.bsky.social' },
+              { did: 'did:plc:hiddenlabel000000000000', labels: [{ val: '!no-unauthenticated' }] },
+            ],
+          },
+        };
+      if (url.pathname.endsWith('app.bsky.actor.getProfiles'))
+        return { status: 200, body: { profiles: [profile, hidden] } };
+      throw new Error(`unrouted ${url}`);
+    });
+    const hits = await new BlueskyPublicCollector(bsky.http).searchProfiles(ctx, 'example grow', 8);
+    expect(bsky.of('searchActorsTypeahead')[0]!.url.searchParams.get('q')).toBe('example grow');
+    // Accounts that ask not to be shown to logged-out people are never looked up or shown.
+    expect(bsky.of('getProfiles')[0]!.url.searchParams.getAll('actors')).toEqual([DID]);
+    expect(hits).toEqual([
+      {
+        externalId: DID,
+        username: 'examplegrow.bsky.social',
+        displayName: 'Example Grow (fixture)',
+        profilePictureUrl: profile.avatar,
+        followers: profile.followersCount ?? null,
+      },
+    ]);
+    expect(bsky.calls.every((call) => !call.headers.get('authorization'))).toBe(true);
+  });
+});
+
 describe('Bluesky in the registry', () => {
   it('is a public platform that needs no key and no viewer', () => {
     expect(hasPublicCollector('bluesky')).toBe(true);

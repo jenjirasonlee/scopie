@@ -16,10 +16,13 @@ import {
   BUSINESS_ROLE_VALUES,
   LOOKUPS_PER_HOUR,
   PUBLIC_PROFILE_PLATFORMS,
+  YOUTUBE_SEARCHES_PER_DAY,
+  isSearchable,
   parseHandleList,
   publicPlatform,
   type LookupState,
   type PublicProfilePlatform,
+  type SearchResult,
 } from './shared';
 
 const NO_PERMISSION = 'Only owners and admins can manage tracked profiles.';
@@ -142,6 +145,74 @@ export async function lookupPublicProfile(
   } catch (error) {
     if (error instanceof PlatformError) {
       return { status: 'error', handle, message: lookupErrorMessage(platform, error) };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Finds public profiles by name on platforms whose official API allows it (YouTube with the
+ * server key, Bluesky with none). YouTube searches are counted, since each costs 100 quota units.
+ */
+export async function searchPublicProfiles(
+  orgSlug: string,
+  platformValue: string,
+  rawQuery: string,
+): Promise<SearchResult> {
+  const query = rawQuery.trim().replace(/\s+/g, ' ').slice(0, 60);
+  const { org, role, user } = await getOrgContext(orgSlug);
+  if (!can(role, 'accounts.manage')) return { status: 'error', query, message: NO_PERMISSION };
+  if (org.is_demo) {
+    return {
+      status: 'error',
+      query,
+      message: 'The DEMO organization does not search live data. Create your own organization.',
+    };
+  }
+  if (!isSearchable(platformValue)) {
+    return { status: 'error', query, message: 'This platform can only be added by username.' };
+  }
+  const platform = platformValue;
+  if (query.length < 2) return { status: 'success', query, hits: [] };
+  const env = serverEnv();
+  const credential = publicApiCredential(env, platform);
+  if (platform === 'youtube' && (!credential || !env.SUPABASE_SERVICE_ROLE_KEY)) {
+    return { status: 'error', query, message: NOT_SET_UP.youtube };
+  }
+
+  if (platform === 'youtube') {
+    const admin = createAdminClient();
+    const { count } = await admin
+      .from('public_profile_lookups')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('platform_key', 'youtube')
+      .gte('looked_up_at', new Date(Date.now() - 86_400_000).toISOString());
+    if ((count ?? 0) >= YOUTUBE_SEARCHES_PER_DAY) {
+      return {
+        status: 'error',
+        query,
+        message: `Your organization has used today’s ${YOUTUBE_SEARCHES_PER_DAY} YouTube searches. Paste the channel link instead; that still works.`,
+      };
+    }
+    await admin.from('public_profile_lookups').insert({
+      organization_id: org.id,
+      requested_by: user.id,
+      platform_key: 'youtube',
+    });
+  }
+
+  try {
+    const collector = createPublicCollector(platform, {})!;
+    const hits = await collector.searchProfiles!(
+      { viewerId: null, credential: credential ?? '' },
+      query,
+      8,
+    );
+    return { status: 'success', query, hits };
+  } catch (error) {
+    if (error instanceof PlatformError) {
+      return { status: 'error', query, message: lookupErrorMessage(platform, error) };
     }
     throw error;
   }

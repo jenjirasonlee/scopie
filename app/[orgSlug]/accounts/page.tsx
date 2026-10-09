@@ -165,16 +165,16 @@ export default async function AccountsPage({
       {accounts.length === 0 ? (
         <div className="bg-card rounded-lg border border-dashed px-6 py-12 text-center">
           <p className="font-medium">
-            {isFiltered ? 'No accounts match these filters.' : 'No social accounts yet.'}
+            {isFiltered ? 'No accounts match these filters.' : 'No profiles yet.'}
           </p>
           <p className="text-muted-foreground mt-1 text-[13px]">
             {isFiltered
               ? 'Try another filter or reset them.'
-              : 'Add each of your social accounts with its platform and country.'}
+              : 'Add a competitor, an industry account or one of your own to start collecting their public numbers.'}
           </p>
           {!isFiltered && canManage ? (
             <Button asChild className="mt-4">
-              <Link href={`/${orgSlug}/accounts/new`}>Add your first account</Link>
+              <Link href={`/${orgSlug}/accounts/new`}>Add your first profile</Link>
             </Button>
           ) : null}
         </div>
@@ -303,7 +303,7 @@ function GroupRows({
             <TableCell className="text-right">
               <div className="flex justify-end gap-1">
                 <Button asChild variant="ghost" size="sm">
-                  <Link href={`/${orgSlug}/accounts/${account.id}`}>Edit</Link>
+                  <Link href={`/${orgSlug}/accounts/${account.id}?edit=1`}>Edit</Link>
                 </Button>
                 <ActiveToggle
                   orgSlug={orgSlug}

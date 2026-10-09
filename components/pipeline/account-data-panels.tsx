@@ -54,6 +54,7 @@ export function SyncCard({
   runs,
   earliestPostAt,
   canManage,
+  canSync = true,
   timeZone,
 }: {
   orgSlug: string;
@@ -61,6 +62,8 @@ export function SyncCard({
   runs: SyncRun[];
   earliestPostAt: string | null;
   canManage: boolean;
+  /** False when the platform can't be read on this server yet, so a sync would do nothing. */
+  canSync?: boolean;
   timeZone: string;
 }) {
   return (
@@ -86,7 +89,7 @@ export function SyncCard({
             </>
           ) : null}
         </dl>
-        {(account.connection_id || account.access_type === 'public') && canManage ? (
+        {(account.connection_id || account.access_type === 'public') && canManage && canSync ? (
           <InlineActionForm
             action={requestSync.bind(null, orgSlug)}
             hidden={{

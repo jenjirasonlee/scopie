@@ -90,6 +90,32 @@ export function publicDataUnavailableReason(platformKey: string): string {
  */
 export const LOOKUPS_PER_HOUR = 30;
 
+/**
+ * Platforms whose official API can find profiles by name with the credential Scopie has.
+ * Instagram (Business Discovery) and X (app-only token) only read an exact username.
+ */
+export const SEARCHABLE_PLATFORMS = ['youtube', 'bluesky'] as const;
+export type SearchablePlatform = (typeof SEARCHABLE_PLATFORMS)[number];
+export function isSearchable(platform: string): platform is SearchablePlatform {
+  return (SEARCHABLE_PLATFORMS as readonly string[]).includes(platform);
+}
+
+/** A YouTube search costs 100 of the 10,000 daily quota units, so it gets its own daily cap. */
+export const YOUTUBE_SEARCHES_PER_DAY = 40;
+
+/** A profile found by name. Public fields only. */
+export type SearchHit = {
+  externalId: string;
+  username: string;
+  displayName: string | null;
+  profilePictureUrl: string | null;
+  followers: number | null;
+};
+
+export type SearchResult =
+  | { status: 'success'; query: string; hits: SearchHit[] }
+  | { status: 'error'; query: string; message: string };
+
 export const BUSINESS_ROLE_VALUES = [
   'owned',
   'competitor',
