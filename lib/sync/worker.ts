@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/db/types';
 import { createAdapter, createPublicCollector, needsViewer } from '@/lib/platforms/registry';
-import { metaConfig, parseServerEnv } from '@/lib/server-env';
+import {
+  metaConfig,
+  parseServerEnv,
+  publicApiCredential,
+  readyApiKeyPlatforms,
+} from '@/lib/server-env';
 import { loadAccountContext, loadPublicContext } from './credentials';
 import type { EngineDeps } from './engine';
 import { enqueueDueJobs, failStaleRuns, processQueue, pruneRawPayloads } from './scheduler';
@@ -35,7 +40,8 @@ export function workerDepsFromEnv(
     publicContextFor: async (organizationId, platformKey) =>
       needsViewer(platformKey)
         ? loadPublicContext(db, organizationId, platformKey, encryptionKey)
-        : { viewerId: null, credential: server.YOUTUBE_API_KEY ?? '' },
+        : // A server key (YouTube, X) or none at all (Bluesky). Never logged or sent anywhere else.
+          { viewerId: null, credential: publicApiCredential(server, platformKey) ?? '' },
   };
 }
 
@@ -43,7 +49,7 @@ export function workerDepsFromEnv(
 export async function syncTick(deps: EngineDeps, now: Date = new Date()) {
   await failStaleRuns(deps.db, now);
   const queued = await enqueueDueJobs(deps.db, now, {
-    apiKeyPlatforms: process.env.YOUTUBE_API_KEY ? ['youtube'] : [],
+    apiKeyPlatforms: readyApiKeyPlatforms(parseServerEnv(process.env)),
   });
   const results = await processQueue(deps);
   await pruneRawPayloads(deps.db, now);

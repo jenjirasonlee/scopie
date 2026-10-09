@@ -21,6 +21,11 @@ export const PUBLIC_JOBS = [
   'public_backfill',
 ] as const satisfies readonly SyncJobType[];
 
+/** Profiles on a platform billed per item read (X): one planned observation a day. */
+export const BILLED_PUBLIC_JOBS = [
+  'public_profile_daily',
+] as const satisfies readonly SyncJobType[];
+
 export function isPublicJob(job: SyncJobType): job is (typeof PUBLIC_JOBS)[number] {
   return (PUBLIC_JOBS as readonly string[]).includes(job);
 }
@@ -53,6 +58,9 @@ export const MAX_PAGES: Record<SyncJobType, number> = {
   public_posts_refresh: 4,
   public_backfill: 20,
 };
+
+/** Platforms billed per read (X): the first observation reads posts back this far, within the cap. */
+export const BILLED_FIRST_READ_DAYS = 30;
 
 /** Public backfill reads posts back this far, then stops (PHASE_3_PLAN.md §7). */
 export const PUBLIC_BACKFILL_MONTHS = 12;

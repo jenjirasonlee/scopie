@@ -15,6 +15,7 @@ Migrations:
 - `supabase/migrations/20261012000100_content_strategy.sql` (Phase 7, Content strategy; §6)
 - `supabase/migrations/20261013000100_ai_analyst.sql` (Phase 8, AI analyst + recommendations; §8.4)
 - `supabase/migrations/20261014000100_weekly_reports.sql` (Phase 9, Weekly intelligence reports; §8.5)
+- `supabase/migrations/20261015000100_more_platforms.sql` (Phase 10, More platforms: X public data available; Bluesky, Threads and Pinterest platform rows; a `profile` account type; the `quotes` metric. See API_INTEGRATIONS.md §4c, §4d and §6)
 
 Phase 1:
 

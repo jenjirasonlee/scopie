@@ -1,6 +1,6 @@
 # Scopie — Roadmap
 
-> Status: Phases 1 to 9 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 10 is next. Last updated: 2026-10-09
+> Status: Phases 1 to 10 built. Phase 3 (public profile intelligence, [PHASE_3_PLAN.md](PHASE_3_PLAN.md)) still needs its live check on a real Meta app, and Phase 4's YouTube collector its live check with a real API key. Phase 11 is next. X and Bluesky haven't been tried against the live APIs yet. Last updated: 2026-10-09
 
 ## 1. Product focus
 
@@ -42,7 +42,7 @@ Each phase ends with: app runs locally, lint + typecheck + tests green, docs upd
 | **7** Content strategy ✅                 | Strategies per market, objectives and KPIs, pillar targets, coverage                                                                                                                                                                                                                           | Content linked to an objective; coverage shows                                                                      |
 | **8** AI analyst + recommendations ✅     | Provider layer, topics and content gaps from public posts, insights with evidence, "what should CANNA test" recommendations with computed confidence                                                                                                                                           | Insights cite stored values; no causal claims without evidence                                                      |
 | **9** Weekly intelligence reports ✅      | Scheduled weekly report, snapshot, in-app view, sharing                                                                                                                                                                                                                                        | Monday report generated automatically                                                                               |
-| **10** More platforms                     | Facebook Pages public data (after Meta's Page Public Content Access approval), Instagram hashtag search (after approval), TikTok, X, LinkedIn through official access or a licensed provider; CSV import until then                                                                            | Each with an honest public/private capability list                                                                  |
+| **10** More platforms ✅                  | Facebook Pages public data (after Meta's Page Public Content Access approval), Instagram hashtag search (after approval), TikTok, X, LinkedIn through official access or a licensed provider; CSV import until then                                                                            | Each with an honest public/private capability list                                                                  |
 | **11** Productivity + career intelligence | Workflow stats, career intelligence, AI chat and content assistant, PDF export                                                                                                                                                                                                                 | —                                                                                                                   |
 
 ## 3. Dependencies
@@ -140,6 +140,19 @@ The schedule is a Trigger.dev task (`trigger/reports.ts`) that asks the app ever
 
 Not built yet: PDF export (after V1), email delivery, reports for other periods (monthly, per campaign), and comparing a report with earlier ones.
 
-## 15. Next step
+## 15. Phase 10 outcome
 
-**Phase 10: More platforms.** Facebook Pages public data and Instagram hashtag search once Meta approves them, then TikTok, X and LinkedIn through official access or a licensed provider.
+Checked on 2026-10-09 which platforms let Scopie read other accounts' public numbers through an official API without the platform approving the app first: only X and Bluesky. Delivered:
+
+- **X**: any public account by @handle or link, read daily through the official X API v2 with a key set on the server (`X_BEARER_TOKEN`). Followers, following, post count, and per post likes, replies, reposts, quotes, bookmarks and views. X charges per read (pay-per-use credits), so Scopie reads each profile once a day, only new posts, and re-reads posts only until they are a week old, with at most 50 posts per profile per run. Protected accounts are not read. Posts deleted on X are deleted from Scopie when they are re-read, as X's terms require.
+- **Bluesky**: any public account by handle or link, through Bluesky's open public API, with no key. Followers, following, post count, and per post likes, replies, reposts and quotes (Bluesky has no views). Accounts that ask apps not to show them to logged-out people are not read.
+- A list in Settings → Public data saying, for every platform, whether its public data is available and, if not, why: Facebook Pages (Meta's Page Public Content Access approval and a verified business), LinkedIn and Threads (platform approval), TikTok, Pinterest and Discord (no official way), Reddit (written approval for commercial use). CSV import works for all of them.
+- DEMO X and Bluesky profiles in the seed.
+
+Neither collector has been tried against the live API yet (this environment can't reach them); they are tested against responses written from the official documentation.
+
+Not built yet: Facebook Pages public data (waits for Meta's approval), Threads and LinkedIn (wait for approval), TikTok and Pinterest public data (no official route), older X history (X charges for it).
+
+## 16. Next step
+
+**Phase 11: Productivity + career intelligence.** Workflow stats, career intelligence, AI chat and content assistant, PDF export.

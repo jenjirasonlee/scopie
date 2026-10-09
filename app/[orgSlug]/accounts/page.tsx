@@ -62,7 +62,7 @@ export default async function AccountsPage({
     <div className="space-y-5">
       <PageHeader
         title="Accounts"
-        description="Profiles you monitor: your own and competitors, industry accounts and creators. Public Instagram profiles and YouTube channels are read through the official APIs; other data comes from a connection or CSV import."
+        description="Profiles you monitor: your own and competitors, industry accounts and creators. Public Instagram, YouTube, X and Bluesky profiles are read through the official APIs; other data comes from a connection or CSV import."
         actions={
           canManage ? (
             <div className="flex gap-2">

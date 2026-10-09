@@ -29,8 +29,9 @@ export type DemoAccountData = {
 
 /**
  * 'connected' mimics an owner-authorized account (insights such as reach and saves).
- * 'public' mimics a competitor read through Business Discovery: followers, likes (sometimes
- * hidden by the owner), comments and Reel views only. Private metrics are never generated
+ * 'public' mimics a profile read through a public API: followers, likes (sometimes hidden by
+ * the owner on Instagram and YouTube), comments and views where the platform shows them, and
+ * on X and Bluesky reposts and quotes (and X bookmarks). Private metrics are never generated
  * for public profiles, not even as DEMO DATA.
  */
 export type DemoMode = 'connected' | 'public';
@@ -48,8 +49,12 @@ const FORMATS: Record<string, MediaFormat[]> = {
   youtube: ['long_video', 'short_video'],
   tiktok: ['short_video'],
   linkedin: ['image', 'text', 'carousel', 'video'],
-  x: ['text', 'image'],
+  x: ['text', 'image', 'video'],
+  bluesky: ['text', 'image', 'link'],
 };
+
+/** Platforms where an owner can hide like counts from the public. */
+const LIKES_HIDEABLE = new Set(['instagram', 'youtube']);
 
 function mulberry32(seed: number) {
   let state = seed >>> 0;
@@ -135,8 +140,8 @@ export function generateDemoAccount(input: {
   let time = today - days * DAY;
   let number = 0;
   let earliestPostAt: string | null = null;
-  // Public profiles: a few owners hide like counts, as on Instagram.
-  const hidesLikes = mode === 'public' && random() < 0.25;
+  // Public profiles: a few owners hide like counts, as on Instagram (not possible on X or Bluesky).
+  const hidesLikes = mode === 'public' && LIKES_HIDEABLE.has(input.platformKey) && random() < 0.25;
   while (true) {
     time += between(1, 4) * DAY + between(7, 19) * 3_600_000 - 12 * 3_600_000;
     if (time >= input.now.getTime() - DAY) break;
@@ -183,10 +188,20 @@ export function generateDemoAccount(input: {
         capture.metrics.push(
           hidesLikes ? unavailable('likes', 'hidden_by_owner') : metric('likes', likes),
           metric('comments', Math.round(likes * (0.02 + random() * 0.08))),
-          format === 'short_video' || input.platformKey === 'youtube'
+          // X shows a view (impression) count on every post; Bluesky counts no views at all.
+          format === 'short_video' || input.platformKey === 'youtube' || input.platformKey === 'x'
             ? metric('views', Math.round(reach * (1.3 + random())))
             : unavailable('views', 'not_applicable'),
         );
+        if (input.platformKey === 'x' || input.platformKey === 'bluesky') {
+          capture.metrics.push(
+            metric('shares', Math.round(likes * random() * 0.2)),
+            metric('quotes', Math.round(likes * random() * 0.04)),
+          );
+        }
+        if (input.platformKey === 'x') {
+          capture.metrics.push(metric('saves', Math.round(likes * random() * 0.1)));
+        }
         continue;
       }
       capture.metrics.push(

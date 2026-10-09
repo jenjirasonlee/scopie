@@ -104,7 +104,9 @@ export default async function BenchmarksPage({
   const note =
     view.platformKey === 'youtube' && (metric === 'follower_growth' || metric === 'followers')
       ? 'YouTube shows subscriber counts rounded, so small changes may not appear.'
-      : null;
+      : view.platformKey === 'x' && metric === 'posts_per_week'
+        ? 'X post history starts when a profile was first read (up to 30 days back), because X charges for every post read.'
+        : null;
 
   return (
     <div className="space-y-6">

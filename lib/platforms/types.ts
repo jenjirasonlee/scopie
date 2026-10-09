@@ -100,11 +100,14 @@ export interface PrivateDataAdapter {
 
 /** What a public collector needs: an app-level credential, never a profile owner's token. */
 export type PublicContext = {
-  /** Instagram: the viewer account's id. YouTube: unused. */
+  /** Instagram: the viewer account's id. Other platforms: unused. */
   viewerId: string | null;
   /** The viewer's connection, so an auth failure can mark it for reconnecting. */
   connectionId?: string | null;
-  /** Instagram: the token of the Page the viewer account is linked to. YouTube: an API key. Server only. */
+  /**
+   * Instagram: the token of the Page the viewer account is linked to. YouTube: an API key.
+   * X: the app-only Bearer token. Bluesky: empty (no key). Server only.
+   */
   credential: string;
 };
 
@@ -129,6 +132,31 @@ export type PublicObservation = {
   /** Running totals such as followers and post count, dated the day they were read. */
   accountMetrics: NormalizedAccountMetric[];
   firstPage: PublicPostPage;
+  /**
+   * Billed collectors only: stored posts the platform says no longer exist (deleted or
+   * withheld). The job deletes them and their metrics, as the platform's terms require.
+   */
+  removedPostIds?: string[];
+  /**
+   * Billed collectors only: from this time on, every post was read. Set on the first read
+   * (the window start), and when the per-run cap left newer posts unread before it, so a
+   * gap in post history is never read as "no posts".
+   */
+  completeFrom?: string;
+};
+
+/**
+ * What a collector billed per item read (X) should read in one observation, worked out by
+ * the sync job from what is already stored: only posts newer than the newest stored one,
+ * plus re-reads of stored posts that are due a snapshot.
+ */
+export type PublicReadPlan = {
+  /** External id of the newest stored post; null on the first read. */
+  sinceId: string | null;
+  /** Oldest publish time to read on the first read (ISO 8601). */
+  startTime: string;
+  /** Stored posts to re-measure and to check they still exist, most urgent (oldest) first. */
+  recheckIds: string[];
 };
 
 /**
@@ -142,10 +170,23 @@ export interface PublicProfileCollector {
     ctx: PublicContext,
     handle: string,
   ): Promise<{ profile: PublicProfile; accountMetrics: NormalizedAccountMetric[] }>;
-  /** Profile, totals and the newest page of posts with their metrics. */
-  observeProfile(ctx: PublicContext, handle: string, asOf: string): Promise<PublicObservation>;
+  /**
+   * Profile, totals and the newest page of posts with their metrics. A billed collector
+   * reads only what `plan` asks for.
+   */
+  observeProfile(
+    ctx: PublicContext,
+    handle: string,
+    asOf: string,
+    plan?: PublicReadPlan,
+  ): Promise<PublicObservation>;
   /** Older posts, newest first, with their metrics as of now. */
   listPosts(ctx: PublicContext, handle: string, cursor: string | null): Promise<PublicPostPage>;
+  /**
+   * True when the platform bills every item read (X). Such profiles get only the daily
+   * observation, planned by the job (PublicReadPlan); no refresh or backfill jobs run.
+   */
+  readonly billedPerRead?: boolean;
   /** Share of the platform's rate limit used so far (0-100), when the platform reports it. */
   readonly appUsage?: number;
   drainRawPayloads?(): RawPayload[];

@@ -1,0 +1,16 @@
+{
+  "data": {
+    "id": "1500000000000000002",
+    "username": "PrivateGrower",
+    "name": "Private Grower (fixture)",
+    "description": "",
+    "protected": true,
+    "public_metrics": {
+      "followers_count": 120,
+      "following_count": 98,
+      "tweet_count": 400,
+      "listed_count": 0,
+      "like_count": 10
+    }
+  }
+}

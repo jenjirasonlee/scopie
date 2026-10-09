@@ -37,10 +37,15 @@ export function redactUrl(url: string): string {
 
 /** Removes anything that looks like a token from free text (error messages from platforms). */
 export function redactText(text: string): string {
-  return text
-    .replace(new RegExp(`\\b(${SECRET_PARAMS.join('|')})=[^&\\s"]+`, 'gi'), '$1=REDACTED')
-    .replace(/\bEA[A-Za-z0-9]{20,}\b/g, 'REDACTED')
-    .replace(/\bAIza[0-9A-Za-z_-]{30,}/g, 'REDACTED');
+  return (
+    text
+      .replace(new RegExp(`\\b(${SECRET_PARAMS.join('|')})=[^&\\s"]+`, 'gi'), '$1=REDACTED')
+      .replace(/\bEA[A-Za-z0-9]{20,}\b/g, 'REDACTED')
+      .replace(/\bAIza[0-9A-Za-z_-]{30,}/g, 'REDACTED')
+      // X app-only Bearer tokens start with a long run of A's and are URL-encoded.
+      .replace(/\bBearer\s+[A-Za-z0-9%._~+/=-]+/gi, 'Bearer REDACTED')
+      .replace(/\bA{16,}[A-Za-z0-9%._~+/=-]*/g, 'REDACTED')
+  );
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

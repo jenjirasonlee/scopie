@@ -287,24 +287,143 @@ The default quota is 10,000 units a day per Google Cloud project; every call Sco
 | Subscriber history and earlier video metrics | Only current totals; Scopie builds history from the day it is added |
 | Dislike counts                               | Removed from the public API in 2021                                 |
 
+## 4c. Public data: X API v2
+
+Built in Phase 10 (`lib/platforms/x/public.ts`). The official X API v2 returns public profile and post metrics for any public X account with an app-only Bearer token: no login from the account owner. Plain-language setup: [PUBLIC_DATA_SETUP.md](PUBLIC_DATA_SETUP.md#x-key).
+
+Reference: [User lookup by username](https://docs.x.com/x-api/users/user-lookup-by-username) · [User posts timeline](https://docs.x.com/x-api/users/get-posts) · [Post lookup by ids](https://docs.x.com/x-api/posts/post-lookup-by-post-ids) · [Pricing](https://developer.x.com/#pricing) · [Developer terms](https://developer.x.com/en/developer-terms/agreement-and-policy)
+
+### Key and setup
+
+- One server-wide app-only Bearer token in `X_BEARER_TOKEN` (server only, never `NEXT_PUBLIC_`, never in a client component, never logged). Set it on the web server and, if the sync runs there, in Trigger.dev.
+- X is **pay-per-use**: credits are bought in the developer portal and every resource read is billed. Scopie never retries a billed read in a loop and never pages beyond its cap.
+- The token is sent in the `Authorization: Bearer` header, never in a URL. `redactText` removes `Bearer …` and anything shaped like an X Bearer token from error text.
+- Without the token, X profiles can still be added, but nothing is scheduled for them; **Settings → Public data** and **Add profile** say "X needs an API key on the server".
+- A rejected token (401) fails the run with an auth error; it never marks the profile as broken.
+
+### Calls
+
+| Call                                                                                                                                                                                 | Used for                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `GET /2/users/by/username/:username?user.fields=public_metrics,description,profile_image_url,url,verified,protected,created_at,name,entities`                                        | Profile, totals, protected flag                               |
+| `GET /2/users/:id/tweets?exclude=retweets,replies&tweet.fields=created_at,public_metrics,attachments,entities,referenced_tweets&expansions=attachments.media_keys&media.fields=type` | Own posts, newest first, with `since_id` or `start_time`      |
+| `GET /2/tweets?ids=…` (same fields)                                                                                                                                                  | Re-reading stored posts; posts not returned have been deleted |
+
+Handles are accepted as `@name`, `name`, or an `x.com` / `twitter.com` profile link (1–15 letters, digits, `_`).
+
+### Fields used
+
+| X field                          | Scopie                          | Notes                                                                            |
+| -------------------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
+| `id`, `username`                 | `external_id`, handle           | The user id is checked on every observation                                      |
+| `name`, `description`, `url`     | `profile_snapshots`             | The `t.co` website link is replaced by its expanded URL                          |
+| `public_metrics.followers_count` | `followers` (`audience_size`)   |                                                                                  |
+| `public_metrics.following_count` | `following` (`following`)       |                                                                                  |
+| `public_metrics.tweet_count`     | `posts_total` (`x_tweet_count`) | Includes replies and reposts, so not compared with other platforms               |
+| `like_count`                     | `likes` (`likes`)               |                                                                                  |
+| `reply_count`                    | `comments` (`comments`)         | Replies                                                                          |
+| `retweet_count`                  | `shares` (`reposts`)            | Reposts                                                                          |
+| `quote_count`                    | `quotes` (`quotes`)             | New metric in Phase 10                                                           |
+| `bookmark_count`                 | `saves` (`x_bookmarks`)         | Public on X                                                                      |
+| `impression_count`               | `views` (`x_public_views`)      | X shows it as "views"; its own class, never compared with other platforms' views |
+| media `type`                     | `media_format`                  | `photo` → image; `video`, `animated_gif` → video; no media → text                |
+
+A count X leaves out is stored as `not_public`, never 0. Quote posts are kept (`native_type = quote`); replies and reposts are not read.
+
+### Cost and limits
+
+X bills per resource read (about **$0.010 per user and $0.005 per post**, each counted once per UTC day; check the current price list). To keep this low, X profiles get **only the daily observation** (no `public_posts_refresh`, no `public_backfill`), planned by the sync job from what is stored:
+
+- the profile (1 user read);
+- posts newer than the newest stored one (`since_id`); on the first read, posts of the last 30 days (`start_time`);
+- re-reads of stored posts that are due a snapshot, only until they have their 7-day value (`ENGAGEMENT_AGE_DAYS` plus the 15% tolerance of `post_metrics_at_age`), oldest first;
+- at most **50 posts per profile per run** (`X_MAX_POSTS_PER_RUN`), re-reads first, and at most 3 timeline requests.
+
+A post is read about 5 times in its first week (new, then at about 1, 2, 3 and 7 days): roughly $0.025 per post plus $0.01 per profile per day. 20 profiles posting twice a day cost about $0.20 + $1.00 a day. When the cap leaves new posts unread, `earliest_post_at` moves forward to the oldest post read and a warning is logged, so the gap is never counted as "no posts". Post history starts at the first read: older posts are never bought.
+
+HTTP 429 waits until `x-rate-limit-reset`. HTTP 402 or a credits error ("CreditsDepleted") stops the profile's reads for 24 hours with "X credits are used up"; nothing is stored for the gap.
+
+### Deleted content (X developer terms)
+
+Content deleted on X must be deleted here. Every re-read asks for the stored post ids; **a post X no longer returns (deleted, withheld or now protected) is deleted from Scopie with all its metric snapshots**, and the run logs `posts_removed`. Post text is never kept in `raw_payloads` (replaced by `[not kept]`), so deleted text doesn't linger for the 30-day debug retention. Posts older than the re-read window are not checked again (that would be billed); removing the profile in Scopie deletes everything stored for it.
+
+### Not available
+
+| Data                                                   | Why                                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Protected accounts                                     | Only approved followers can see them; Scopie refuses them with a clear message |
+| Link clicks, profile visits, video views, demographics | Non-public metrics need the owner's login (OAuth)                              |
+| Posts from before the first read (beyond 30 days)      | Each post read is billed; history starts at the first observation              |
+| Follower history                                       | Only current totals; history builds from the day the profile is added          |
+
+## 4d. Public data: Bluesky (AT Protocol)
+
+Built in Phase 10 (`lib/platforms/bluesky/public.ts`). Bluesky's public AppView serves every public profile and post with no key and no login.
+
+Reference: [app.bsky.actor.getProfile](https://docs.bsky.app/docs/api/app-bsky-actor-get-profile) · [app.bsky.feed.getAuthorFeed](https://docs.bsky.app/docs/api/app-bsky-feed-get-author-feed) · [Rate limits](https://docs.bsky.app/docs/advanced-guides/rate-limits)
+
+### Key and setup
+
+None. Bluesky profiles are scheduled like YouTube channels (daily observation, post refresh every 3 hours, one backfill of up to 12 months) as soon as they are added.
+
+### Calls
+
+| Call                                                                                       | Used for                             |
+| ------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `GET https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=<handle>`            | Profile, totals, DID, labels         |
+| `GET …/app.bsky.feed.getAuthorFeed?actor=<did>&filter=posts_no_replies&limit=100&cursor=…` | Own posts, newest first, with cursor |
+
+Handles are accepted as `@name.bsky.social`, `name.bsky.social`, a custom domain (`brand.com`), a DID, or a `https://bsky.app/profile/<handle>` link. A bare name (`@brand`) means `brand.bsky.social`. Feed items with a `reason` (reposts of others) are skipped.
+
+### Fields used
+
+| Field                                         | Scopie                             | Notes                                                                               |
+| --------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `did`, `handle`                               | `external_id`, handle              | The DID is checked on every observation                                             |
+| `displayName`, `description`, `avatar`        | `profile_snapshots`                |                                                                                     |
+| `followersCount`                              | `followers` (`audience_size`)      |                                                                                     |
+| `followsCount`                                | `following` (`following`)          |                                                                                     |
+| `postsCount`                                  | `posts_total` (`bsky_posts_count`) | Includes replies                                                                    |
+| `post.uri`, `record.text`, `record.createdAt` | post id, caption, published time   | Permalink `https://bsky.app/profile/<handle>/post/<rkey>`                           |
+| `likeCount`, `replyCount`                     | `likes`, `comments`                |                                                                                     |
+| `repostCount`, `quoteCount`                   | `shares` (`reposts`), `quotes`     |                                                                                     |
+| embed type                                    | `media_format`                     | images → image; video → video; external link card → link; text or quote only → text |
+
+A count the AppView leaves out is stored as `not_public`, never 0.
+
+### Limits
+
+The public AppView allows about 3,000 requests per 5 minutes per IP. HTTP 429 waits for `Retry-After` or `ratelimit-reset`. Accounts that set "discourage apps from showing my account to logged-out users" (label `!no-unauthenticated`) are not read and the add-profile preview says so. Unknown, deactivated or taken-down accounts report "Bluesky has no public account".
+
+### Not available
+
+| Data                  | Why                                                          |
+| --------------------- | ------------------------------------------------------------ |
+| Views or impressions  | Bluesky doesn't count them                                   |
+| Audience demographics | Not collected by Bluesky                                     |
+| Follower history      | Only current totals; history builds from the day it is added |
+
 ## 5. DEMO data
 
-There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics (connected-style for own profiles, public-API-style for public Instagram profiles and YouTube channels), and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
+There is no demo connector or demo platform. `lib/demo/generate.ts` produces deterministic fictional posts and metrics (connected-style for own profiles, public-API-style for public Instagram profiles, YouTube channels and every X and Bluesky profile, since those platforms have no owner connection), and `scripts/seed-demo.ts` writes them through the same `ingest()` path as real data with `data_source = 'demo'`. The database accepts `demo` data only in organizations with `is_demo = true`, demo accounts have `connection_status = 'demo'`, and the UI labels them **DEMO**. See DATABASE.md §10.
 
 ## 6. Platform capability matrix (planning)
 
-Legend: ✓ available · ◐ limited / approval needed · ✗ not available via official API · ? to verify
+Legend: ✓ available · ◐ limited / approval needed · ✗ not available via official API · ? to verify. Public/competitor data checked 2026-10-09. What the app shows comes from `platforms.public_data_status` and `PUBLIC_DATA_UNAVAILABLE_REASONS` in `lib/public-data/shared.ts`. CSV import works for every platform.
 
-| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                                                                                                                                  | Access hurdle                                                                         | Phase                      |
-| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------- |
-| Instagram      | Meta OAuth             | ✓ built: reach, views, interactions, likes, comments, shares, saves, followers, Reels watch time (§4)                                   | ✓ Business Discovery through a viewer account: followers, post count, bio, website, posts with link, caption, time, type, likes (unless hidden), comment count, Reel views. Checked 2026-10-07; see §4a | Pro account + Facebook Page for the viewer; App Review only to serve other businesses | **2 ✅**, public: **3 ✅** |
-| Facebook Pages | Meta OAuth             | ✓ built: followers, Page reach and engagements, post reactions/comments/shares/reach/impressions/clicks (subject to Meta deprecations)  | ◐ limited public Page fields (not built)                                                                                                                                                                | Page role; App Review for other businesses                                            | **2 ✅**                   |
-| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: channel subscriber count (rounded), video views/likes/comments                                                                                                                              | Daily quota (10,000 units); public data needs only an API key                         | 4 (public)                 |
-| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                                                                                                                             | Partner application/approval                                                          | 10; CSV import until then  |
-| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ (Research API is for academic research, not usable here)                                                                                                                                              | App review                                                                            | 10                         |
-| X              | OAuth 2.0              | ◐ public + (own, recent) non-public tweet metrics                                                                                       | ◐ public metrics                                                                                                                                                                                        | Paid API tier required                                                                | later (optional)           |
-| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data                                                                                                                                                                                      | Commercial use terms                                                                  | later                      |
-| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                                                                                                                                       | Bot added by server admin; Server Insights not in public API **[verify]**             | later                      |
+| Platform       | Auth                   | Own-account analytics                                                                                                                   | Public/competitor data                                                                                                                            | Access hurdle                                                                         | Phase                      |
+| -------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------- |
+| Instagram      | Meta OAuth             | ✓ built: reach, views, interactions, likes, comments, shares, saves, followers, Reels watch time (§4)                                   | ✓ Business Discovery through a viewer account: followers, post count, bio, website, posts, likes (unless hidden), comment count, Reel views (§4a) | Pro account + Facebook Page for the viewer; App Review only to serve other businesses | **2 ✅**, public: **3 ✅** |
+| Facebook Pages | Meta OAuth             | ✓ built: followers, Page reach and engagements, post reactions/comments/shares/reach/impressions/clicks (subject to Meta deprecations)  | ◐ other Pages need Meta's **Page Public Content Access** feature (App Review) and business verification; not built                                | PPCA approval + business verification                                                 | **2 ✅**                   |
+| YouTube        | Google OAuth + API key | ✓ YouTube Analytics API: views, watch time, avg view duration, subs gained/lost, likes, shares                                          | ✓ Data API: subscriber count (rounded), video views/likes/comments (§4b)                                                                          | Daily quota (10,000 units); public data needs only an API key                         | 4 (public)                 |
+| X              | OAuth 2.0 + Bearer     | ◐ non-public metrics (impressions detail, link clicks) of own recent posts need the owner's OAuth (not built)                           | ✓ API v2 app-only: followers, following, post count, per post likes/replies/reposts/quotes/bookmarks/views; protected accounts excluded (§4c)     | Pay-per-use credits, billed per read                                                  | public: **10 ✅**          |
+| Bluesky        | none (public AppView)  | ✗ no private analytics exist                                                                                                            | ✓ AppView: followers, following, post count, per post likes/replies/reposts/quotes; no views (§4d)                                                | None; respects the "no logged-out apps" label                                         | public: **10 ✅**          |
+| LinkedIn       | LinkedIn OAuth         | ◐ Org page follower/share statistics via Community Management API                                                                       | ✗ no general competitor API                                                                                                                       | Partner application/approval                                                          | CSV import                 |
+| Threads        | Meta OAuth             | ◐ Threads API: own profile and post insights                                                                                            | ◐ reading other profiles needs Meta's approval for extra permissions; not available to Scopie                                                     | App Review                                                                            | CSV import                 |
+| TikTok         | TikTok OAuth           | ◐ Display API: follower/like/video counts, per-video views/likes/comments/shares; richer business analytics via TikTok API for Business | ✗ no official way to read other accounts' numbers (Research API is for academic research only)                                                    | App review                                                                            | CSV import                 |
+| Pinterest      | Pinterest OAuth        | ◐ API v5: own account and Pin analytics                                                                                                 | ✗ no official way to read other accounts' numbers                                                                                                 | App review                                                                            | CSV import                 |
+| Reddit         | OAuth                  | ◐ post score, comments, subreddit subscribers; no reach/impressions                                                                     | ◐ same public data, but commercial use needs Reddit's written approval                                                                            | Commercial use terms                                                                  | CSV import                 |
+| Discord        | Bot token              | ◐ community metrics (member counts, message activity in channels the bot can see)                                                       | ✗                                                                                                                                                 | Bot added by server admin; Server Insights not in public API **[verify]**             | later                      |
 
 Until a platform has a connector, its accounts get data through CSV import (Scopie templates, plus column aliases for common exports such as LinkedIn's). All rows marked ◐ or ? are verified before the connector is built and documented here, including exact scopes and metric names.
 
@@ -312,7 +431,7 @@ Until a platform has a connector, its accounts get data through CSV import (Scop
 
 1. Create `lib/platforms/<provider>/` with an adapter implementing `PrivateDataAdapter` and/or a collector implementing `PublicProfileCollector` (Zod schemas for every response; missing values become an availability reason, never defaults) and, if needed, an OAuth module like `meta/oauth.ts`.
 2. Add mappings to `PLATFORM_METRIC_MAP` in `lib/metrics/registry.ts` **and** the same rows to `platform_metric_map` in a migration, each with a `comparability_class`. Add new metrics to both `METRIC_DEFINITIONS` and `metric_definitions`. Integration tests check code and database match.
-3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`; or `PUBLIC_DATA_PLATFORMS`, `createPublicCollector`) and, in the same migration, set `platforms.private_data_status` or `public_data_status` to `'available'`, and `reporting_timezone`.
+3. Register it in `lib/platforms/registry.ts` (`CONNECTED_PLATFORMS`, `PROVIDER_FOR_PLATFORM`, `createAdapter`; or `PUBLIC_DATA_PLATFORMS`, `createPublicCollector`, plus `KEYLESS_PUBLIC_PLATFORMS` or `BILLED_PUBLIC_PLATFORMS` when it needs no key or bills per read; a server key goes in `publicApiCredential` in `lib/server-env.ts`) and, in the same migration, set `platforms.private_data_status` or `public_data_status` to `'available'`, and `reporting_timezone`.
 4. Add connect/callback routes under `app/api/connections/<provider>/` and a `lib/connections/<provider>.ts` that stores tokens only through `connection_credentials`.
 5. Add fixture tests (`tests/fixtures/<provider>/`): happy path, pagination, rate limit, expired token, missing permission, metric not returned.
 6. Add env vars to `lib/server-env.ts` and `.env.example`, and setup steps to this document.

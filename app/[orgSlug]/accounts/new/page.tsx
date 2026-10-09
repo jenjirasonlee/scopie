@@ -17,6 +17,7 @@ import {
   lookupPublicProfile,
 } from '@/lib/public-data/actions';
 import { getPublicDataViewer } from '@/lib/public-data/queries';
+import { publicDataSetup } from '@/lib/public-data/setup';
 import { serverEnv } from '@/lib/server-env';
 
 export const metadata: Metadata = { title: 'Add profile' };
@@ -28,6 +29,7 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
     getAccountFormOptions(org.id),
     getPublicDataViewer(org.id),
   ]);
+  const setup = publicDataSetup(serverEnv(), Boolean(viewer));
 
   if (!can(role, 'accounts.manage')) {
     return (
@@ -44,7 +46,7 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
     <div className="max-w-3xl space-y-6">
       <PageHeader
         title="Add profile"
-        description="Track any public Instagram business or creator account, including competitors. The owner doesn't need to approve anything."
+        description="Track public profiles on Instagram, YouTube, X and Bluesky, including competitors. The owner doesn't need to approve anything."
       />
 
       {org.is_demo ? (
@@ -59,21 +61,25 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
         <Alert variant="warning">
           <Info aria-hidden />
           <AlertDescription>
-            You can add profiles now, but Scopie can only read them once you{' '}
+            You can add Instagram profiles now, but Scopie can only read them once you{' '}
             <Link className="underline" href={`/${orgSlug}/settings/public-data`}>
               choose a viewer account
             </Link>
-            . Previews are switched off until then.
+            . Instagram previews are switched off until then.
           </AlertDescription>
         </Alert>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle>Public Instagram profile or YouTube channel</CardTitle>
+          <CardTitle>Public profile</CardTitle>
           <CardDescription>
-            Read through Instagram&apos;s official API with your viewer account. Only public numbers
-            are collected.
+            Read through each platform&apos;s official API: Instagram with your viewer account,
+            YouTube and X with a key on the server, Bluesky with no key. Only public numbers are
+            collected.{' '}
+            <Link className="underline" href={`/${orgSlug}/settings/public-data`}>
+              Which platforms have public data
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -82,9 +88,23 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
             addAction={addPublicProfile.bind(null, orgSlug)}
             countries={options.countries}
             canPreview={{
-              instagram: Boolean(viewer) && !org.is_demo,
-              youtube: Boolean(serverEnv().YOUTUBE_API_KEY) && !org.is_demo,
+              instagram: !setup.instagram && !org.is_demo,
+              youtube: !setup.youtube && !org.is_demo,
+              x: !setup.x && !org.is_demo,
+              bluesky: !setup.bluesky && !org.is_demo,
             }}
+            setupNote={
+              org.is_demo
+                ? undefined
+                : {
+                    youtube: setup.youtube
+                      ? `${setup.youtube} You can add channels now; they are read once it is set.`
+                      : undefined,
+                    x: setup.x
+                      ? `${setup.x} You can add profiles now; they are read once it is set.`
+                      : undefined,
+                  }
+            }
           />
         </CardContent>
       </Card>
@@ -93,8 +113,9 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
         <CardHeader>
           <CardTitle>Add several profiles</CardTitle>
           <CardDescription>
-            Paste a list or upload a CSV. Each profile is checked on its first sync; profiles
-            Instagram can&apos;t read (personal or age-restricted accounts) are flagged then.
+            Paste a list or upload a CSV, for one platform at a time. Each profile is checked on its
+            first sync; profiles the platform can&apos;t read (for example personal Instagram or
+            protected X accounts) are flagged then.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -106,8 +127,9 @@ export default async function NewAccountPage({ params }: { params: Promise<{ org
         <CardHeader>
           <CardTitle>Any other profile</CardTitle>
           <CardDescription>
-            For your own accounts you will connect, and for platforms without an official public API
-            yet (LinkedIn, TikTok, X). Their data comes from a connection or CSV import.
+            For your own accounts you will connect, and for platforms without public data in Scopie
+            (Facebook, LinkedIn, TikTok, Threads, Pinterest, Reddit). Their data comes from a
+            connection or CSV import.
           </CardDescription>
         </CardHeader>
         <CardContent>

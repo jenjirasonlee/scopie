@@ -1,0 +1,14 @@
+{
+  "did": "did:plc:fixture2grow4example7bsk",
+  "handle": "examplegrow.bsky.social",
+  "displayName": "Example Grow (fixture)",
+  "description": "Fixture account for tests. Not a real account. #hydroponics",
+  "avatar": "https://cdn.bsky.app/img/avatar/plain/did:plc:fixture2grow4example7bsk/fixture@jpeg",
+  "associated": { "lists": 0, "feedgens": 0, "starterPacks": 0, "labeler": false },
+  "indexedAt": "2024-11-20T10:00:00.000Z",
+  "createdAt": "2024-11-20T09:58:00.000Z",
+  "labels": [],
+  "followersCount": 3120,
+  "followsCount": 210,
+  "postsCount": 845
+}

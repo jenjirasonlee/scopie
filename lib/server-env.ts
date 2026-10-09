@@ -17,6 +17,8 @@ const serverEnvSchema = z.object({
   META_APP_SECRET: z.string().min(16).optional(),
   /** YouTube Data API v3 key for public channels (Google Cloud Console → Credentials). */
   YOUTUBE_API_KEY: z.string().min(20).optional(),
+  /** X API v2 app-only Bearer token for public X profiles (developer.x.com, pay-per-use). */
+  X_BEARER_TOKEN: z.string().min(30).optional(),
   META_GRAPH_API_VERSION: z
     .string()
     .regex(/^v\d+\.\d+$/)
@@ -59,6 +61,7 @@ export function serverEnv(): ServerEnv {
     META_APP_SECRET: process.env.META_APP_SECRET,
     META_GRAPH_API_VERSION: process.env.META_GRAPH_API_VERSION,
     YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
+    X_BEARER_TOKEN: process.env.X_BEARER_TOKEN,
     ASSET_STORAGE: process.env.ASSET_STORAGE,
     ASSET_LOCAL_DIR: process.env.ASSET_LOCAL_DIR,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -78,6 +81,28 @@ export function metaConfig(env: ServerEnv = serverEnv()): MetaConfig | null {
     appSecret: env.META_APP_SECRET,
     version: env.META_GRAPH_API_VERSION,
   };
+}
+
+/**
+ * The server-wide credential a public collector without a viewer account uses: '' for a
+ * platform that needs none (Bluesky), null when the needed key isn't set. Server only.
+ */
+export function publicApiCredential(env: ServerEnv, platformKey: string): string | null {
+  switch (platformKey) {
+    case 'youtube':
+      return env.YOUTUBE_API_KEY ?? null;
+    case 'x':
+      return env.X_BEARER_TOKEN ?? null;
+    case 'bluesky':
+      return '';
+    default:
+      return null;
+  }
+}
+
+/** Public platforms read with a server key (or none) that are ready on this server. */
+export function readyApiKeyPlatforms(env: ServerEnv): string[] {
+  return ['youtube', 'x', 'bluesky'].filter((key) => publicApiCredential(env, key) !== null);
 }
 
 /** What the data pipeline still needs before it can talk to Meta, in plain words. */

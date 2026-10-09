@@ -1,5 +1,11 @@
 import type { FormState } from '@/lib/forms';
+import {
+  BLUESKY_DID,
+  isBlueskyHandle,
+  normalizeBlueskyHandle,
+} from '@/lib/platforms/bluesky/public';
 import { INSTAGRAM_USERNAME, normalizeHandle } from '@/lib/platforms/meta/business-discovery';
+import { X_USER_ID, X_USERNAME, normalizeXHandle } from '@/lib/platforms/x/public';
 import {
   YOUTUBE_CHANNEL_ID,
   YOUTUBE_HANDLE,
@@ -24,15 +30,64 @@ export const PUBLIC_PROFILE_PLATFORMS = {
     externalId: YOUTUBE_CHANNEL_ID,
     accountType: 'channel',
   },
+  x: {
+    label: 'X',
+    normalize: normalizeXHandle,
+    isValid: (handle: string) => X_USERNAME.test(handle),
+    invalidMessage:
+      'Enter an X username such as @brandname (up to 15 letters, numbers or _), or a profile link.',
+    externalId: X_USER_ID,
+    accountType: 'profile',
+  },
+  bluesky: {
+    label: 'Bluesky',
+    normalize: normalizeBlueskyHandle,
+    isValid: isBlueskyHandle,
+    invalidMessage:
+      'Enter a Bluesky handle such as brand.bsky.social or brand.com, or a profile link.',
+    externalId: BLUESKY_DID,
+    accountType: 'profile',
+  },
 } as const;
 
 export type PublicProfilePlatform = keyof typeof PUBLIC_PROFILE_PLATFORMS;
 
+export const PUBLIC_PROFILE_PLATFORM_KEYS = Object.keys(
+  PUBLIC_PROFILE_PLATFORMS,
+) as PublicProfilePlatform[];
+
 export function publicPlatform(value: string): PublicProfilePlatform {
-  return value === 'youtube' ? 'youtube' : 'instagram';
+  return value in PUBLIC_PROFILE_PLATFORMS ? (value as PublicProfilePlatform) : 'instagram';
 }
 
-/** Add-profile previews per organization per hour. Syncs use the rest of Meta's limit. */
+/**
+ * Why Scopie can't read other accounts' public numbers on a platform, in plain words for
+ * the capability list. CSV import works for every platform. Platforms that can be read
+ * (platforms.public_data_status = 'available') have no entry.
+ */
+export const PUBLIC_DATA_UNAVAILABLE_REASONS: Record<string, string> = {
+  facebook:
+    'Needs Meta’s approval for Page Public Content Access and a verified business. Not set up in Scopie.',
+  linkedin: 'Needs LinkedIn’s approval as a partner. There is no general way to read other pages.',
+  threads: 'Needs Meta’s approval to read other accounts. Not available to Scopie yet.',
+  tiktok: 'TikTok has no official way to read other accounts’ public numbers.',
+  pinterest: 'Pinterest has no official way to read other accounts’ public numbers.',
+  reddit: 'Using Reddit’s data commercially needs Reddit’s written approval.',
+  discord: 'Discord has no official way to read other servers’ numbers.',
+};
+
+/** The plain reason a platform's public data can't be read, or a general one. */
+export function publicDataUnavailableReason(platformKey: string): string {
+  return (
+    PUBLIC_DATA_UNAVAILABLE_REASONS[platformKey] ??
+    'There is no official way for Scopie to read other accounts’ numbers here yet.'
+  );
+}
+
+/**
+ * Add-profile previews per organization per hour. Syncs use the rest of Meta's limit, and
+ * each X preview is billed (about $0.01).
+ */
 export const LOOKUPS_PER_HOUR = 30;
 
 export const BUSINESS_ROLE_VALUES = [
@@ -71,9 +126,10 @@ export function parseHandleList(
   const invalid: string[] = [];
   for (const line of text.split(/\r?\n/)) {
     const [first = '', second = ''] = line.split(/[,;\t]/).map((cell) => cell.trim());
-    if (!first || /^(username|handle|instagram|youtube|channel)$/i.test(first)) continue;
+    if (!first || /^(username|handle|instagram|youtube|channel|x|twitter|bluesky)$/i.test(first))
+      continue;
     const rules = PUBLIC_PROFILE_PLATFORMS[platform];
-    const handle = rules.normalize(first.replace(/^"|"$/g, ''));
+    const handle: string = rules.normalize(first.replace(/^"|"$/g, ''));
     if (!rules.isValid(handle)) {
       invalid.push(first);
       continue;

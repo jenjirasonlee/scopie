@@ -32,6 +32,21 @@ const TRACKABLE: Record<PublicProfilePlatform, string[]> = {
     'Videos: link, title, description, date and hashtags',
     'Views, likes (unless hidden) and comments (unless turned off) per video',
   ],
+  x: [
+    'Followers, observed once a day from today',
+    'Number of posts (X counts replies and reposts too) and accounts followed',
+    'Bio and website, with changes recorded',
+    'Posts: link, text, date, format and hashtags (no replies or reposts)',
+    'Likes, replies, reposts, quotes, bookmarks and views per post',
+    'Posts deleted on X are deleted in Scopie too',
+  ],
+  bluesky: [
+    'Followers, observed once a day from today',
+    'Number of posts and accounts followed',
+    'Display name and bio, with changes recorded',
+    'Posts: link, text, date, format and hashtags (no replies or reposts)',
+    'Likes, replies, reposts and quotes per post',
+  ],
 };
 const NOT_PUBLIC: Record<PublicProfilePlatform, string[]> = {
   instagram: [
@@ -46,7 +61,43 @@ const NOT_PUBLIC: Record<PublicProfilePlatform, string[]> = {
     'Whether a video is a Short (not exposed by the API)',
     'Subscriber history before today',
   ],
+  x: [
+    'Protected accounts (only approved followers can see them)',
+    'Link clicks, profile visits and audience demographics',
+    'Posts from more than 30 days before you add it',
+    'Follower history before today',
+  ],
+  bluesky: [
+    'Views (Bluesky doesn’t count them)',
+    'Audience demographics',
+    'Accounts that ask apps not to show them to logged-out people',
+    'Follower history before today',
+  ],
 };
+
+const FIELD: Record<PublicProfilePlatform, { label: string; hint: string }> = {
+  instagram: {
+    label: 'Instagram username',
+    hint: 'A business or creator account, e.g. @brandname or a profile link.',
+  },
+  youtube: {
+    label: 'YouTube handle',
+    hint: 'Any public channel, e.g. @brandname or a channel link.',
+  },
+  x: { label: 'X username', hint: 'Any public account, e.g. @brandname or an x.com link.' },
+  bluesky: {
+    label: 'Bluesky handle',
+    hint: 'E.g. brand.bsky.social, a custom domain, or a bsky.app profile link.',
+  },
+};
+
+/** Platforms in the order they are offered. */
+export const PUBLIC_PLATFORM_OPTIONS: { value: PublicProfilePlatform; label: string }[] = [
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'x', label: 'X' },
+  { value: 'bluesky', label: 'Bluesky' },
+];
 
 const nf = new Intl.NumberFormat('en-GB');
 
@@ -55,12 +106,15 @@ export function AddPublicProfile({
   addAction,
   countries,
   canPreview,
+  setupNote,
 }: {
   lookupAction: Action;
   addAction: Action;
   countries: Option[];
   /** Per platform: false when its API isn't set up yet. Profiles can still be added. */
   canPreview: Record<PublicProfilePlatform, boolean>;
+  /** Per platform: what is missing on the server, shown when preview is off. */
+  setupNote?: Partial<Record<PublicProfilePlatform, string>>;
 }) {
   const [platform, setPlatform] = useState<PublicProfilePlatform>('instagram');
   const [lookup, lookupFormAction] = useActionState(lookupAction, { status: 'idle' });
@@ -78,18 +132,17 @@ export function AddPublicProfile({
             value={platform}
             onChange={(event) => setPlatform(event.target.value as PublicProfilePlatform)}
           >
-            <option value="instagram">Instagram</option>
-            <option value="youtube">YouTube</option>
+            {PUBLIC_PLATFORM_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </NativeSelect>
         </FormField>
         <FormField
           id="lookup-handle"
-          label={platform === 'youtube' ? 'YouTube handle' : 'Instagram username'}
-          hint={
-            platform === 'youtube'
-              ? 'Any public channel, e.g. @brandname or a channel link.'
-              : 'A business or creator account, e.g. @brandname or a profile link.'
-          }
+          label={FIELD[platform].label}
+          hint={FIELD[platform].hint}
           className="min-w-64 flex-1"
         >
           <Input
@@ -107,6 +160,9 @@ export function AddPublicProfile({
           </SubmitButton>
         ) : null}
       </form>
+      {!canPreview[platform] && setupNote?.[platform] ? (
+        <p className="text-muted-foreground -mt-3 text-[13px]">{setupNote[platform]}</p>
+      ) : null}
 
       {lookup.status === 'error' && lookup.message ? (
         <Alert variant="destructive" aria-live="polite">
