@@ -1,6 +1,6 @@
 # Scopie — AI Architecture
 
-> Status: Phase 0 design. Last updated: 2026-10-06
+> Status: insights and recommendations built in Phase 8 (§10); weekly report, chat and content assistant still design. Last updated: 2026-10-08
 
 ## 1. Principles
 
@@ -163,3 +163,12 @@ Ideas, captions, hooks, repurposing, platform adaptations, briefs. Grounded in: 
 - Validators: fixtures with fabricated numbers, unknown evidence ids, causal phrasing → must be rejected.
 - Engines: `fake` provider returns canned outputs to test the full pipeline without network.
 - Prompt changes bump `prompt_version`; a small eval set of demo-data scenarios runs in CI with the fake provider and optionally live.
+
+## 10. What Phase 8 built
+
+- `lib/ai/signals.ts`: follower growth and posting frequency changes (28 days against the 28 before), format winners and losers on own profiles, competitor formats and topics (hashtags) the organization uses less, standout posts, pillars under target in a running strategy. Engagement is likes + comments at 7 days, divided by the profile's own median, so profiles of different sizes compare. Minimums: 5 measured posts for a profile's usual, 8 posts per format and outside it, 3 posts per topic.
+- `lib/ai/confidence.ts`: high needs 30+ posts across 3+ profiles, 75% of them agreeing, and a 1.3× difference; medium 12+ posts and 1.2×. Pillar gaps are medium (they are about the plan).
+- `lib/ai/rules.ts`: Scopie's own writer, used when no model is configured and as the fallback.
+- `lib/ai/model.ts` and `validate.ts`: the model (OpenAI, strict JSON schema, prompt `insights-v1`) may reword, pick and order insights, and lower confidence one step. Every number must appear in the cited evidence (rounding and percentages allowed), causal and promising wording is refused, unknown signals are dropped. A failed call keeps the rules text for the whole run.
+- `lib/ai/run.ts`: loads data as the user (RLS), saves with the service role, one run per two minutes per organization, `AI_MAX_RUNS_PER_DAY` model runs (default 20).
+- Not built from this design yet: trends and anomaly scores over 8 to 12 weeks, bootstrap intervals, the weekly report engine, chat, the content assistant, per-org AI settings and token budgets, cost tracking.

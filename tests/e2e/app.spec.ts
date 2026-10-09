@@ -579,3 +579,32 @@ test('plan a strategy with a pillar target and an objective, and see content cou
   // Planned content isn't published, so the objective still reads 0.
   await expect(page.getByText('0 of 4 published')).toBeVisible();
 });
+
+test('managers run an analysis without an AI key; viewers read it', async ({ browser }) => {
+  const manager = await createUser('e2e-analyst');
+  const viewer = await createUser('e2e-reader');
+  const org = await createOrg(manager, 'Insights Org');
+  await addMember(org.id, viewer, 'VIEWER');
+
+  const managerPage = await (await browser.newContext()).newPage();
+  await signIn(managerPage, manager.email);
+  await managerPage.goto(`/${org.slug}/insights`);
+  await expect(managerPage.getByRole('heading', { name: 'No analysis yet' })).toBeVisible();
+  await managerPage.getByRole('button', { name: 'Run analysis' }).click();
+  await expect(
+    managerPage.getByText(/Written from your numbers by Scopie’s own rules/),
+  ).toBeVisible();
+  // A new organization has no data, so nothing is reported, and nothing is made up.
+  await expect(managerPage.getByText(/Nothing stood out enough in this period/)).toBeVisible();
+  // Runs are spaced out.
+  await managerPage.getByRole('button', { name: 'Run analysis again' }).click();
+  await expect(managerPage.getByText(/less than 2 minutes ago/)).toBeVisible();
+
+  const viewerPage = await (await browser.newContext()).newPage();
+  await signIn(viewerPage, viewer.email);
+  await viewerPage.goto(`/${org.slug}/insights`);
+  await expect(
+    viewerPage.getByText(/Written from your numbers by Scopie’s own rules/),
+  ).toBeVisible();
+  await expect(viewerPage.getByRole('button', { name: /Run analysis/ })).toHaveCount(0);
+});
