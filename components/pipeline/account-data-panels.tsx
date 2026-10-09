@@ -7,30 +7,43 @@ import { AVAILABILITY_LABELS, SYNC_JOB_LABELS } from '@/lib/accounts/labels';
 import type { SocialAccount } from '@/lib/accounts/queries';
 import { requestSync } from '@/lib/connections/actions';
 import { getMetric } from '@/lib/metrics/registry';
+import { formatDateTime } from '@/lib/content/review';
 import type { Enums } from '@/lib/db/types';
 import type { ObservationHistory, PostWithMetrics, SyncRun } from '@/lib/pipeline/queries';
 
-const dateTime = (value: string) => new Date(value).toLocaleString('en-GB');
-const date = (value: string) => new Date(value).toLocaleDateString('en-GB');
+/** "8 Oct 2026, 14:05" in the organization's time zone. */
+const dateTime = (value: string, timeZone: string) => formatDateTime(value, timeZone);
+/** "8 Oct 2026". Plain dates (YYYY-MM-DD) are read in UTC so they never shift a day. */
+const date = (value: string, timeZone = 'UTC') =>
+  new Date(value.length === 10 ? `${value}T00:00:00Z` : value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: value.length === 10 ? 'UTC' : timeZone,
+  });
 const number = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 
 /**
  * One sentence on what history Scopie holds, so nobody reads a gap as a zero:
  * "Observed since 7 Oct 2026; posts complete back to 3 Mar 2025."
  */
-export function coverageLine(account: SocialAccount, earliestPostAt: string | null): string {
+export function coverageLine(
+  account: SocialAccount,
+  earliestPostAt: string | null,
+  timeZone: string,
+): string {
   if (account.access_type === 'demo') return 'DEMO DATA: generated, not observed.';
   if (!account.first_observed_at) {
     return account.access_type === 'public'
       ? 'Not observed yet. The first observation happens on the next sync.'
       : 'No observations yet.';
   }
-  const since = `Observed since ${date(account.first_observed_at)}`;
+  const since = `Observed since ${date(account.first_observed_at, timeZone)}`;
   if (account.earliest_post_at) {
-    return `${since}; posts complete back to ${date(account.earliest_post_at)}.`;
+    return `${since}; posts complete back to ${date(account.earliest_post_at, timeZone)}.`;
   }
   return earliestPostAt
-    ? `${since}; older posts are still being read (oldest so far ${date(earliestPostAt)}).`
+    ? `${since}; older posts are still being read (oldest so far ${date(earliestPostAt, timeZone)}).`
     : `${since}.`;
 }
 
@@ -41,12 +54,14 @@ export function SyncCard({
   runs,
   earliestPostAt,
   canManage,
+  timeZone,
 }: {
   orgSlug: string;
   account: SocialAccount;
   runs: SyncRun[];
   earliestPostAt: string | null;
   canManage: boolean;
+  timeZone: string;
 }) {
   return (
     <Card className="h-fit">
@@ -54,14 +69,16 @@ export function SyncCard({
         <CardTitle>Data</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-[13px]">
-        <p>{coverageLine(account, earliestPostAt)}</p>
+        <p>{coverageLine(account, earliestPostAt, timeZone)}</p>
         <dl className="grid grid-cols-2 gap-y-2">
           <dt className="text-muted-foreground">Observed since</dt>
-          <dd>{account.first_observed_at ? date(account.first_observed_at) : 'Not yet'}</dd>
+          <dd>
+            {account.first_observed_at ? date(account.first_observed_at, timeZone) : 'Not yet'}
+          </dd>
           <dt className="text-muted-foreground">Last observed</dt>
-          <dd>{account.last_observed_at ? dateTime(account.last_observed_at) : '—'}</dd>
+          <dd>{account.last_observed_at ? dateTime(account.last_observed_at, timeZone) : '—'}</dd>
           <dt className="text-muted-foreground">Oldest post stored</dt>
-          <dd>{earliestPostAt ? date(earliestPostAt) : '—'}</dd>
+          <dd>{earliestPostAt ? date(earliestPostAt, timeZone) : '—'}</dd>
           {account.history_available_from ? (
             <>
               <dt className="text-muted-foreground">History back to</dt>
@@ -97,7 +114,8 @@ export function SyncCard({
                   <SyncStatusBadge status={run.status} />
                 </div>
                 <div className="text-muted-foreground text-xs">
-                  {dateTime(run.completed_at ?? run.queued_at)} · {run.records_processed} records
+                  {dateTime(run.completed_at ?? run.queued_at, timeZone)} · {run.records_processed}{' '}
+                  records
                   {run.records_failed ? `, ${run.records_failed} failed` : ''}
                 </div>
                 {run.error_message ? (
@@ -127,8 +145,10 @@ const SHOWN_METRICS = [
 export function RecentPosts({
   posts,
   publicOnly = false,
+  timeZone,
 }: {
   posts: PostWithMetrics[];
+  timeZone: string;
   /** Public profiles: show public, imported and demo numbers only, never connected ones. */
   publicOnly?: boolean;
 }) {
@@ -156,7 +176,7 @@ export function RecentPosts({
                   <div className="flex flex-wrap items-center gap-2">
                     <DataSourceBadge source={post.dataSource} />
                     <span className="text-muted-foreground">
-                      {dateTime(post.publishedAt)} · {post.mediaFormat.replace('_', ' ')}
+                      {dateTime(post.publishedAt, timeZone)} · {post.mediaFormat.replace('_', ' ')}
                     </span>
                     {post.permalink ? (
                       <a
@@ -200,7 +220,7 @@ export function RecentPosts({
                   )}
                   {capturedAt ? (
                     <p className="text-muted-foreground text-xs">
-                      Numbers as of {dateTime(capturedAt)}
+                      Numbers as of {dateTime(capturedAt, timeZone)}
                     </p>
                   ) : null}
                 </li>
@@ -221,7 +241,13 @@ export function RecentPosts({
  * Follower observations as they were made: one row per observation, with the change since
  * the previous one. Days without an observation are simply absent.
  */
-export function ObservationHistoryCard({ history }: { history: ObservationHistory }) {
+export function ObservationHistoryCard({
+  history,
+  timeZone,
+}: {
+  history: ObservationHistory;
+  timeZone: string;
+}) {
   const rows = history.followers.slice(-30).reverse();
   const first = history.followers.find((row) => row.value !== null);
   const last = history.followers.findLast((row) => row.value !== null);
@@ -242,8 +268,8 @@ export function ObservationHistoryCard({ history }: { history: ObservationHistor
           <>
             {growth !== null && first && last ? (
               <p>
-                {number.format(first.value!)} on {date(first.observedAt)} →{' '}
-                {number.format(last.value!)} on {date(last.observedAt)}:{' '}
+                {number.format(first.value!)} on {date(first.observedAt, timeZone)} →{' '}
+                {number.format(last.value!)} on {date(last.observedAt, timeZone)}:{' '}
                 <strong>
                   {growth >= 0 ? '+' : ''}
                   {number.format(growth)}% observed growth
@@ -275,7 +301,7 @@ export function ObservationHistoryCard({ history }: { history: ObservationHistor
                         : null;
                     return (
                       <tr key={`${row.observedAt}-${row.source}`}>
-                        <td className="px-3 py-1.5">{dateTime(row.observedAt)}</td>
+                        <td className="px-3 py-1.5">{dateTime(row.observedAt, timeZone)}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums">
                           {row.value === null ? 'not available' : number.format(row.value)}
                         </td>
@@ -306,7 +332,9 @@ export function ObservationHistoryCard({ history }: { history: ObservationHistor
             <ul className="space-y-1">
               {history.profileChanges.slice(0, -1).map((change) => (
                 <li key={change.observedAt}>
-                  <span className="text-muted-foreground">{date(change.observedAt)}:</span>{' '}
+                  <span className="text-muted-foreground">
+                    {date(change.observedAt, timeZone)}:
+                  </span>{' '}
                   {change.biography ? `bio “${change.biography}”` : 'bio removed'}
                   {change.website ? ` · website ${change.website}` : ''}
                 </li>

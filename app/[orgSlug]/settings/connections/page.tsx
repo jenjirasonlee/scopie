@@ -19,6 +19,7 @@ import {
 import { SYNC_JOB_LABELS } from '@/lib/accounts/labels';
 import { listAccounts } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
+import { formatDateTime } from '@/lib/content/review';
 import { disconnectConnection, linkAsset, unlinkAccount } from '@/lib/connections/actions';
 import { listConnections } from '@/lib/connections/queries';
 import { getOrgContext } from '@/lib/orgs/queries';
@@ -296,7 +297,7 @@ export default async function ConnectionsPage({
                       {run.records_failed ? ` (${run.records_failed} failed)` : ''}
                     </TableCell>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {new Date(run.completed_at ?? run.queued_at).toLocaleString('en-GB')}
+                      {formatDateTime(run.completed_at ?? run.queued_at, org.default_timezone)}
                     </TableCell>
                   </TableRow>
                 ))}

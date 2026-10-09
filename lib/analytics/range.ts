@@ -33,6 +33,7 @@ export function inPeriod(at: string | Date, period: Period): boolean {
 /** Posts measured at `ageDays` during a period are the ones published `ageDays` earlier. */
 export function shiftPeriod(period: Period, days: number): Period {
   return {
+    ...period,
     start: new Date(period.start.getTime() - days * DAY_MS),
     end: new Date(period.end.getTime() - days * DAY_MS),
   };
@@ -49,7 +50,17 @@ export function observationTime(metricDate: string, capturedAt: string | null): 
   return new Date(`${metricDate}T00:00:00.000Z`).toISOString();
 }
 
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const DAY_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+function dayFormat(timeZone: string): Intl.DateTimeFormat {
+  let format = DAY_FORMATS.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone });
+    DAY_FORMATS.set(timeZone, format);
+  }
+  return format;
+}
+
 const DATE_YEAR = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
@@ -58,8 +69,8 @@ const DATE_YEAR = new Intl.DateTimeFormat('en-GB', {
 });
 
 /** "7 Oct" */
-export function formatDay(at: string | Date): string {
-  return DATE.format(typeof at === 'string' ? new Date(at) : at);
+export function formatDay(at: string | Date, timeZone = 'UTC'): string {
+  return dayFormat(timeZone).format(typeof at === 'string' ? new Date(at) : at);
 }
 
 /** "7 Oct 2026" */
@@ -69,5 +80,6 @@ export function formatDate(at: string | Date): string {
 
 /** "7 Oct – 6 Nov" for a half-open period (the end shown is the last included day). */
 export function formatPeriod(period: Period): string {
-  return `${formatDay(period.start)} – ${formatDay(new Date(period.end.getTime() - 1))}`;
+  const timeZone = period.timeZone ?? 'UTC';
+  return `${formatDay(period.start, timeZone)} – ${formatDay(new Date(period.end.getTime() - 1), timeZone)}`;
 }

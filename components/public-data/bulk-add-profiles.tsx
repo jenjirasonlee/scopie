@@ -28,12 +28,13 @@ export function BulkAddProfiles({
           <Textarea
             name="handles"
             rows={5}
+            defaultValue={state.values?.handles}
             placeholder={'brand_one,NL\n@brand_two\nbrand_three,DE'}
           />
         </FormField>
         <div className="space-y-4">
           <FormField id="bulk-platform" label="Platform">
-            <NativeSelect name="platform" defaultValue="instagram">
+            <NativeSelect name="platform" defaultValue={state.values?.platform ?? 'instagram'}>
               {PUBLIC_PLATFORM_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -42,7 +43,11 @@ export function BulkAddProfiles({
             </NativeSelect>
           </FormField>
           <FormField id="bulk-role" label="Why you track them">
-            <NativeSelect name="businessRole" defaultValue="competitor" required>
+            <NativeSelect
+              name="businessRole"
+              defaultValue={state.values?.businessRole ?? 'competitor'}
+              required
+            >
               {BUSINESS_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {BUSINESS_ROLE_LABELS[role]}

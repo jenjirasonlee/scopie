@@ -256,18 +256,24 @@ export async function addPublicProfilesInBulk(
 ): Promise<BulkResult> {
   const { org, role } = await getOrgContext(orgSlug);
   if (!can(role, 'accounts.manage')) return { status: 'error', message: NO_PERMISSION };
-  const businessRole = z.enum(BUSINESS_ROLE_VALUES).safeParse(field(formData, 'businessRole'));
-  if (!businessRole.success) return { status: 'error', message: 'Choose why you track them.' };
+  // Echoed back so a failed submit keeps the list and the choices.
+  const values = {
+    handles: field(formData, 'handles'),
+    platform: field(formData, 'platform'),
+    businessRole: field(formData, 'businessRole'),
+  };
+  const businessRole = z.enum(BUSINESS_ROLE_VALUES).safeParse(values.businessRole);
+  if (!businessRole.success)
+    return { status: 'error', message: 'Choose why you track them.', values };
   const file = formData.get('file');
-  const text =
-    file instanceof File && file.size > 0 ? await file.text() : field(formData, 'handles');
-  const platform = publicPlatform(field(formData, 'platform'));
+  const text = file instanceof File && file.size > 0 ? await file.text() : values.handles;
+  const platform = publicPlatform(values.platform);
   const { handles, invalid } = parseHandleList(text, platform);
   if (!handles.length && !invalid.length) {
-    return { status: 'error', message: 'Paste usernames or choose a CSV file.' };
+    return { status: 'error', message: 'Paste usernames or choose a CSV file.', values };
   }
   if (handles.length > 200) {
-    return { status: 'error', message: 'Add at most 200 profiles at a time.' };
+    return { status: 'error', message: 'Add at most 200 profiles at a time.', values };
   }
 
   const supabase = await createClient();
@@ -303,6 +309,8 @@ export async function addPublicProfilesInBulk(
     }. The first observation happens on the next sync.`,
     added,
     skipped,
+    // Keep the choices; the list is kept only when nothing was added.
+    values: added.length ? { ...values, handles: '' } : values,
   };
 }
 

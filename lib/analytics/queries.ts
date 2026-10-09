@@ -15,7 +15,7 @@ import type {
 const PAGE = 1000;
 
 /** Reads every row of a query page by page (PostgREST caps a single response). */
-async function fetchAll<T>(
+export async function fetchAll<T>(
   page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
   max = 50_000,
 ): Promise<T[]> {
