@@ -121,16 +121,42 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"ai_generations": {
+                },"ai_chat_messages": {
                   Row: {
-                    "created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"input": NonNullable<Json>,"input_tokens": number | null,"model": string,"organization_id": string,"output": Json | null,"output_tokens": number | null,"prompt_version": string,"provider": string,"purpose": string,"run_id": string | null
+                    "content": string,"created_at": string,"data_used": Json | null,"id": string,"model": string | null,"organization_id": string,"role": string,"user_id": string,"writer": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"input": NonNullable<Json>,"input_tokens"?: number | null,"model": string,"organization_id": string,"output"?: Json | null,"output_tokens"?: number | null,"prompt_version": string,"provider": string,"purpose": string,"run_id"?: string | null
+                    "content": string,"created_at"?: string,"data_used"?: Json | null,"id"?: string,"model"?: string | null,"organization_id": string,"role": string,"user_id": string,"writer"?: string | null
                   }
                   Update: {
-                    "created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"input"?: NonNullable<Json>,"input_tokens"?: number | null,"model"?: string,"organization_id"?: string,"output"?: Json | null,"output_tokens"?: number | null,"prompt_version"?: string,"provider"?: string,"purpose"?: string,"run_id"?: string | null
+                    "content"?: string,"created_at"?: string,"data_used"?: Json | null,"id"?: string,"model"?: string | null,"organization_id"?: string,"role"?: string,"user_id"?: string,"writer"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_chat_messages_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_chat_messages_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ai_generations": {
+                  Row: {
+                    "created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"input": NonNullable<Json>,"input_tokens": number | null,"model": string,"organization_id": string,"output": Json | null,"output_tokens": number | null,"prompt_version": string,"provider": string,"purpose": string,"run_id": string | null,"user_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"input": NonNullable<Json>,"input_tokens"?: number | null,"model": string,"organization_id": string,"output"?: Json | null,"output_tokens"?: number | null,"prompt_version": string,"provider": string,"purpose": string,"run_id"?: string | null,"user_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"input"?: NonNullable<Json>,"input_tokens"?: number | null,"model"?: string,"organization_id"?: string,"output"?: Json | null,"output_tokens"?: number | null,"prompt_version"?: string,"provider"?: string,"purpose"?: string,"run_id"?: string | null,"user_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -139,6 +165,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "analysis_runs"
       referencedColumns: ["id","organization_id"]
+    },{
+      foreignKeyName: "ai_generations_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
     }
                   ]
                 },"ai_insights": {

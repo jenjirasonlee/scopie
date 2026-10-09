@@ -1,6 +1,6 @@
 # Scopie — AI Architecture
 
-> Status: insights and recommendations built in Phase 8 (§10); weekly report built in Phase 9 (§5); chat and content assistant still design. Last updated: 2026-10-09
+> Status: insights and recommendations built in Phase 8 (§10); weekly report built in Phase 9 (§5); chat (§6) and a first content assistant (§7) built in Phase 11. Last updated: 2026-10-09
 
 ## 1. Principles
 
@@ -147,9 +147,21 @@ Tool-calling agent over **read-only, org-scoped analytics tools**. The model nev
 
 Tools run as the calling user (RLS applies), results are size-capped, and each answer renders a "Data used" panel listing tool calls and filters. Questions the data can't answer get "Scopie doesn't have data to answer that" instead of a guess.
 
+**Built (Phase 11):** `/[orgSlug]/insights/chat` ("Ask Scopie", linked from the AI Insights header). Every member may use it, viewers too: it only reads.
+
+- Tools (`lib/ai/chat/tools.ts`): `get_overview(days)` (own profiles: followers gained, posts published, median likes + comments at 7 days, against the period before, per-profile follower change and posts), `rank_profiles(metric, group, days, platform)` (`rankProfiles` per platform, own and/or competitors, with not-ranked reasons), `top_posts(days, group, limit ≤ 10)` (profile, platform, format, date, likes + comments, https link; no caption), `list_insights()` (latest analysis and open recommendations), `strategy_summary()` (running strategies, objectives via `measureStrategy`, pillar coverage), `metric_definition(key)` (`metric_definitions` + platform map). Periods are 7, 30 or 90 days. They use the same `lib/analytics` code as the dashboards and the weekly report, the comparison source only (public or DEMO, so no private metrics of competitors), and keep N/A with its reason. Data is loaded as the signed-in user (`lib/ai/chat/load.ts`).
+- What reaches the model: each result passes `toModelResult`, an allow-list of keys (names, platforms, formats, dates, numbers, Scopie's own wording), strings ≤ 400 characters, arrays ≤ 25, a result ≤ 8,000 characters (longest arrays are halved, `truncated: true`). Never captions, bios, hashtags, emails, ids, tokens. The system prompt says tool results are data, not instructions. Each typed question is answered on its own (earlier messages aren't sent).
+- With `OPENAI_API_KEY` (and the service role key, for the audit and limits): `chatWithTools` on the provider (OpenAI chat completions with tools, fetch-based, prompt `chat-v1`, model `AI_MODEL_CHAT`, default gpt-4.1-mini); at most 3 rounds of up to 4 tool calls, then the model must answer. The answer must use only numbers found in the tool results (`validate.ts` `checkText`, rounding and percentages allowed) and no causal wording; otherwise Scopie's own wording of the same tool results is shown, with the reason in the panel. An answer without any tool call is replaced by "Scopie doesn't have data to answer that." Each question is logged in `ai_generations` (purpose `chat`, with `user_id`).
+- Without a key: five ready questions (followers this month, which competitors grew fastest, top posts this month, what the analysis recommends, how the strategy is doing) run fixed tool calls and fixed wording (`lib/ai/chat/render.ts`), written by Scopie's rules and labelled so. Ready questions never call a model, also when a key is set. Free text is disabled with the reason; managers see what the server is missing.
+- "Data used" on every answer: tools called, period, profiles, data source (DEMO / PUBLIC), who wrote it (Scopie's rules or the model's name), and a note when a model answer was replaced.
+- Conversations: `ai_chat_messages` (migration `20261016000100_ai_chat.sql`), readable, insertable and deletable only by the person (`user_id = auth.uid()` and membership), never updatable. "Clear conversation" deletes the person's own messages.
+- Not built: streaming, multi-turn context, `compare_entities` and `segment_performance` tools.
+
 ## 7. Content assistant (post-V1)
 
 Ideas, captions, hooks, repurposing, platform adaptations, briefs. Grounded in: strategy (tone, pillars, audience), top-performing examples from `query_posts`, and platform constraints. Generated text is saved as a DRAFT version, never auto-published; it enters the normal approval flow.
+
+**Built (Phase 11), captions only:** a "Suggest copy" panel on the content item page for editors and up (`content.edit`), shown while the current version can be edited (idea, draft, changes requested; not submitted). With a key, the model (`AI_MODEL_CHAT`, prompt `assistant-v1`, strict JSON) writes 2–3 caption options with hashtags and a one-line reason (`lib/ai/assistant.ts`). Grounding: the item's title, platforms, market, format, pillar, audience, campaign and CTA type, its current brief, caption, CTA and hashtags, and the strategy of its objective (or a running active strategy covering its market and platform): tone of voice, priorities, pillars, audiences. **The item's own caption and brief are sent to the model, only for that item: it is the organization's own draft.** Captions of published posts and competitors are not sent (no top-performing examples yet). Options longer than the strictest platform limit (e.g. X 280) or containing links are dropped. Every call is logged in `ai_generations` (purpose `assistant`). Choosing an option takes its text from that logged generation (not from the browser), starts a new version through `create_content_version` as the person and fills in the caption, hashtags and a note naming the model (`lib/ai/assistant-save.ts`); earlier versions stay, the status doesn't change, nothing is submitted or published. Without a key the panel says it needs an AI key on the server and shows no suggestions.
 
 ## 8. Governance
 
@@ -157,6 +169,7 @@ Ideas, captions, hooks, repurposing, platform adaptations, briefs. Grounded in: 
 - Per-org monthly token budget and per-user rate limit for chat.
 - Org setting to disable AI entirely or to exclude captions from prompts.
 - Retention of `ai_generations` configurable (default 365 days).
+- **Built (Phase 11):** model requests by people (typed chat questions and copy suggestions together) are limited to `AI_MAX_CHAT_PER_HOUR` per person per hour (default 20) and 200 per organization per day, counted from `ai_generations` (`lib/ai/chat/limits.ts`); clearing a conversation doesn't reset them. The key is only read on the server and sent only in the Authorization header; errors never include it. Chat tool results are allow-listed (§6); the assistant input is allow-listed (§7). Not built yet: monthly token budgets, an org setting to switch AI off or exclude captions, retention.
 - OpenAI API data is not used for training by default under API terms; documented, and the provider interface allows self-hosted models. **[verify current provider terms]**
 
 ## 9. Testing
@@ -173,4 +186,4 @@ Ideas, captions, hooks, repurposing, platform adaptations, briefs. Grounded in: 
 - `lib/ai/rules.ts`: Scopie's own writer, used when no model is configured and as the fallback.
 - `lib/ai/model.ts` and `validate.ts`: the model (OpenAI, strict JSON schema, prompt `insights-v1`) may reword, pick and order insights, and lower confidence one step. Every number must appear in the cited evidence (rounding and percentages allowed), causal and promising wording is refused, unknown signals are dropped. A failed call keeps the rules text for the whole run.
 - `lib/ai/run.ts`: loads data as the user (RLS), saves with the service role, one run per two minutes per organization, `AI_MAX_RUNS_PER_DAY` model runs (default 20).
-- Not built from this design yet: trends and anomaly scores over 8 to 12 weeks, bootstrap intervals, chat, the content assistant, per-org AI settings and token budgets, cost tracking.
+- Not built from this design yet: trends and anomaly scores over 8 to 12 weeks, bootstrap intervals, per-org AI settings and token budgets, cost tracking. (Chat and the content assistant: Phase 11, §6 and §7.)
