@@ -22,6 +22,7 @@ export type ContentFormDefaults = {
   campaignId?: string | null;
   audienceId?: string | null;
   ctaTypeId?: string | null;
+  strategyObjectiveId?: string | null;
   plannedDate?: string;
   plannedTime?: string;
   description?: string | null;
@@ -42,6 +43,8 @@ export type ContentFormOptionLists = {
   campaigns: Option[];
   audiences: Option[];
   ctaTypes: Option[];
+  /** Strategy objectives, grouped by strategy. Inactive ones belong to archived strategies. */
+  objectives: (Option & { groupId: string; group: string })[];
 };
 
 export function ContentForm({
@@ -83,7 +86,7 @@ export function ContentForm({
   );
 
   /** Inactive taxonomy items stay listed only when this item already uses them. */
-  const choices = (list: Option[], current: string | null | undefined) =>
+  const choices = <T extends Option>(list: T[], current: string | null | undefined) =>
     list.filter((option) => option.active !== false || option.value === current);
 
   const taxonomySelect = (
@@ -236,6 +239,13 @@ export function ContentForm({
           {taxonomySelect('campaignId', 'Campaign', options.campaigns)}
           {taxonomySelect('audienceId', 'Audience', options.audiences)}
           {taxonomySelect('ctaTypeId', 'CTA type', options.ctaTypes)}
+          <ObjectiveSelect
+            objectives={choices(options.objectives, defaults.strategyObjectiveId)}
+            defaultValue={value('strategyObjectiveId')}
+            disabled={readOnly}
+            errors={errors.strategyObjectiveId}
+            className="sm:col-span-2"
+          />
         </fieldset>
 
         <fieldset disabled={readOnly} className="grid gap-4">
@@ -297,5 +307,59 @@ export function ContentForm({
         </div>
       )}
     </form>
+  );
+}
+
+/** The strategy objective this content serves, with the objectives grouped by strategy. */
+function ObjectiveSelect({
+  objectives,
+  defaultValue,
+  disabled,
+  errors,
+  className,
+}: {
+  objectives: ContentFormOptionLists['objectives'];
+  defaultValue: string;
+  disabled: boolean;
+  errors?: string[];
+  className?: string;
+}) {
+  const groups = new Map<string, { name: string; options: typeof objectives }>();
+  for (const objective of objectives) {
+    const group = groups.get(objective.groupId) ?? { name: objective.group, options: [] };
+    group.options.push(objective);
+    groups.set(objective.groupId, group);
+  }
+  return (
+    <FormField
+      id="strategyObjectiveId"
+      label="Strategy objective"
+      optional
+      hint={
+        objectives.length
+          ? 'The goal this content works towards.'
+          : 'No strategy objectives yet. Managers add them on the Strategy page.'
+      }
+      errors={errors}
+      className={className}
+    >
+      <NativeSelect
+        name="strategyObjectiveId"
+        defaultValue={defaultValue}
+        disabled={disabled || objectives.length === 0}
+      >
+        <option value="">None</option>
+        {[...groups].map(([groupId, group]) => (
+          <optgroup key={groupId} label={group.name}>
+            {group.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+                {option.active === false ? ' (archived strategy)' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </NativeSelect>
+    </FormField>
   );
 }

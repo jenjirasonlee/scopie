@@ -12,6 +12,7 @@ Migrations:
 - `supabase/migrations/20261009000100_youtube_public.sql` and `20261010000100_benchmark_group_managers.sql` (Phase 4)
 - `supabase/migrations/20261010000200_content_hub.sql` (Phase 5, Content management + calendar; §6)
 - `supabase/migrations/20261011000100_review_approval.sql` (Phase 6, Review + approval; §6)
+- `supabase/migrations/20261012000100_content_strategy.sql` (Phase 7, Content strategy; §6)
 
 Phase 1:
 
@@ -59,7 +60,7 @@ Phase 3:
 Existing data was migrated in place: `authenticated` → `live_connected`, `public` → `live_public`,
 `manual` → `imported`; `is_competitor = true` → `competitor`, otherwise `owned`.
 
-Not yet created: invitations, strategy, AI and reports (§8.3).
+Not yet created: invitations, AI and reports (§8.3).
 
 How data moves through these tables end to end (sync schedule, failure handling) is in [DATA_PIPELINE.md](DATA_PIPELINE.md); what each metric means is in [METRICS.md](METRICS.md).
 
@@ -100,7 +101,7 @@ Global (not tenant-owned): platforms, platform_account_types, countries,
                            metric_definitions, platform_metric_map
 Read models (views): post_metrics_latest, post_metrics_at_age, account_metrics_daily
 
-Planned: invitations, strategies,
+Planned: invitations,
          ai_generations/insights/recommendations, reports, notifications
 ```
 
@@ -526,7 +527,7 @@ create table import_batches (
 
 CSV import (`lib/imports/`) runs as the signed-in user (`accounts.manage`, ADMIN+): it creates a batch, writes rows through ingest as `imported`, then finishes the batch. A trigger stops users changing a batch's identity fields or a finished batch. Batches are never deleted.
 
-## 6. Content, approvals, strategy (content in Phase 5, approvals in Phase 6; strategy planned)
+## 6. Content, approvals, strategy (content in Phase 5, approvals in Phase 6, strategy in Phase 7)
 
 Implemented in `…_content_hub.sql`:
 
@@ -560,7 +561,7 @@ Implemented in `…_review_approval.sql` (Phase 6):
 
 From IN_REVIEW on, the title, platforms, country and taxonomy are locked; the owner and planned date can still change until published. PUBLISHED → ANALYSED is not automated yet.
 
-Not built yet: `strategy_objective_id`, `source_recommendation_id`, `duration_seconds`, multi-step approval (`step`), configurable self-approval.
+Not built yet: `source_recommendation_id`, `duration_seconds`, multi-step approval (`step`), configurable self-approval.
 
 ```sql
 create type content_status as enum
@@ -639,7 +640,16 @@ The sketch below is the original design. What was built is described above; stag
 | any non-terminal                     | ARCHIVED                                  | ADMIN+ or owner                                                 |
 | APPROVED / SCHEDULED, content edited | DRAFT (new version; approval invalidated) | EDITOR+                                                         |
 
-Strategy:
+Strategy, implemented in `…_content_strategy.sql` (Phase 7):
+
+- `strategies`: name, summary, status (`draft`, `active`, `archived`), `period_start`/`period_end` (dates in the organization's time zone, at most two years), `country_codes[]` and `platform_keys[]` (empty means all; checked against `countries` and `platforms`), `tone_of_voice`, `priorities[]`. Replaces the sketched `strategy_scopes` and `strategy_platforms` tables.
+- `strategy_objectives`: name, description, `kpi` (`published_content`, `posts_per_week`, `follower_growth`, `manual`), `target_value` (required unless manual), position.
+- `strategy_pillars` (`target_share`, a deferred check keeps the total at most 100), `strategy_audiences`, `strategy_competitors` (only profiles with business role `competitor`).
+- `content_items.strategy_objective_id`, same organization, cleared when the objective is removed.
+- Coverage and KPI progress are not stored; the app computes them from content and observations (`lib/strategy/`), so nothing claims a result that wasn't measured.
+- Members read; `strategy.manage` (MANAGER+) writes. Strategy and objective changes are logged.
+
+The original sketch, kept for reference:
 
 ```sql
 create table strategies (id uuid pk, organization_id uuid, name text, period_start date, period_end date,

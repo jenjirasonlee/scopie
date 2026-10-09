@@ -5,7 +5,7 @@
 
 ## 0. Implementation status
 
-Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Public profile intelligence ✅ · 4 Benchmarking + YouTube · 5 Content management + calendar · 6 Review + approval · 7 Content strategy · 8 AI analyst + recommendations · 9 Weekly intelligence reports · 10 More platforms · 11 Productivity + career intelligence. See ROADMAP.md.
+Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Public profile intelligence ✅ · 4 Benchmarking + YouTube · 5 Content management + calendar · 6 Review + approval · 7 Content strategy ✅ · 8 AI analyst + recommendations · 9 Weekly intelligence reports · 10 More platforms · 11 Productivity + career intelligence. See ROADMAP.md.
 
 **Product focus (2026-10-07):** Scopie is first a public social intelligence and competitor monitoring tool. Public profiles are observed through official APIs without the owner's authorization; OAuth connections are optional enrichment for CANNA-owned accounts. The core product must work without CANNA Meta Business admin access. See §2a.
 
@@ -37,9 +37,10 @@ What exists in code today:
 | Content items, versions and private file uploads                                                     | `…_content_hub.sql`, `lib/content/`, `app/[orgSlug]/content/`, `app/api/content-assets/`                            |
 | Calendar (month, week, list) in the organization's time zone                                         | `lib/calendar/`, `components/calendar/`, `app/[orgSlug]/calendar/`                                                  |
 | Review and approval, comments, in-app notifications                                                  | `…_review_approval.sql`, `lib/approvals/`, `app/[orgSlug]/approvals/`, `app/[orgSlug]/notifications/`               |
+| Content strategy: objectives, pillar targets, coverage and KPI progress                              | `…_content_strategy.sql`, `lib/strategy/`, `components/strategy/`, `app/[orgSlug]/strategy/`                        |
 | Unit, database integration and Playwright tests; CI                                                  | `tests/`, `.github/workflows/ci.yml`                                                                                |
 
-Not implemented yet: strategy, AI, reports, connectors other than Meta, public data for platforms other than Instagram and YouTube, email notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
+Not implemented yet: AI, reports, connectors other than Meta, public data for platforms other than Instagram and YouTube, email notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
 
 ## 1. Repository inspection (initial design, before Phase 1)
 

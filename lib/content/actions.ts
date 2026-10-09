@@ -52,6 +52,7 @@ function itemFields(input: ContentItemInput, timeZone: string) {
     campaign_id: input.campaignId,
     audience_id: input.audienceId,
     cta_type_id: input.ctaTypeId,
+    strategy_objective_id: input.strategyObjectiveId,
     planned_publish_at: plannedAt(input, timeZone),
   };
 }

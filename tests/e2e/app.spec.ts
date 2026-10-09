@@ -527,3 +527,55 @@ test('submit for review, request changes with a mention, resubmit, approve', asy
   await expect(reviewerPage.getByText(/Asked for changes to version 1/).first()).toBeVisible();
   await expect(reviewerPage.getByText(/Approved version 2/).first()).toBeVisible();
 });
+
+test('plan a strategy with a pillar target and an objective, and see content count toward it', async ({
+  page,
+}) => {
+  const user = await createUser('e2e-strategy');
+  const org = await createOrg(user, 'Strategy Org');
+  await signIn(page, user.email);
+
+  await page.goto(`/${org.slug}/settings/taxonomy`);
+  await page.locator('#new-pillars-name:visible').fill('Grow knowledge');
+  await page.getByRole('button', { name: /Add pillar/i }).click();
+  await expect(page.getByRole('button', { name: 'Deactivate Grow knowledge' })).toBeVisible();
+
+  // New strategies start as drafts for the current quarter.
+  await page.goto(`/${org.slug}/strategy/new`);
+  await page.locator('#new-strategy-name:visible').fill('Autumn plan');
+  await page.getByRole('button', { name: 'Create strategy' }).click();
+  await page.waitForURL(/\/strategy\/[0-9a-f-]{36}/);
+  const strategyUrl = page.url();
+  await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
+
+  await page.locator('summary', { hasText: 'Add an objective' }).click();
+  await page.locator('#new-objective-name:visible').fill('Publish four pieces');
+  await page.locator('#new-objective-targetValue:visible').fill('4');
+  await page.getByRole('button', { name: 'Add objective' }).click();
+  await expect(page.getByText('0 of 4 published')).toBeVisible();
+
+  await page.locator('summary', { hasText: 'Set pillar targets' }).click();
+  await page.getByLabel('Grow knowledge').fill('60');
+  await page.getByRole('button', { name: 'Save targets' }).click();
+  await expect(page.getByText('60% of content has a pillar target')).toBeVisible();
+  await expect(page.getByText('No content is planned for this period yet.')).toBeVisible();
+
+  // Content planned today, on the pillar and the objective, counts toward both.
+  const { date } = utcToZonedParts(new Date(), org.default_timezone);
+  await page.goto(`/${org.slug}/content/new`);
+  await page.locator('#title:visible').fill('Feeding basics');
+  await page.locator('input[name="platformKeys"][value="instagram"]:visible').check();
+  await page.locator('#plannedDate:visible').fill(date);
+  await page.locator('#plannedTime:visible').fill('12:00');
+  await page.locator('#pillarId:visible').selectOption({ label: 'Grow knowledge' });
+  await page.locator('#strategyObjectiveId:visible').selectOption({ label: 'Publish four pieces' });
+  await page.getByRole('button', { name: /Create|Save/ }).click();
+  await page.waitForURL(/\/content\/[0-9a-f-]{36}/);
+  await expect(page.locator('#strategyObjectiveId:visible')).toHaveValue(/[0-9a-f-]{36}/);
+
+  await page.goto(strategyUrl);
+  await expect(page.getByText('1 item: 0 published, 1 planned.')).toBeVisible();
+  await expect(page.getByText('100% of 60%')).toBeVisible();
+  // Planned content isn't published, so the objective still reads 0.
+  await expect(page.getByText('0 of 4 published')).toBeVisible();
+});

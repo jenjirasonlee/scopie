@@ -229,6 +229,7 @@ export default async function ContentItemPage({
                   campaignId: item.campaign_id,
                   audienceId: item.audience_id,
                   ctaTypeId: item.cta_type_id,
+                  strategyObjectiveId: item.strategy_objective_id,
                   plannedDate: planned?.date ?? '',
                   plannedTime: planned?.time ?? '',
                   description: version.description,
