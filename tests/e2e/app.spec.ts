@@ -65,8 +65,9 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
 
   // Empty state, then a validation error that keeps what was typed.
   await page.getByRole('link', { name: 'Accounts', exact: true }).click();
-  await expect(page.getByText('No social accounts yet.')).toBeVisible();
-  await page.getByRole('link', { name: 'Add your first account' }).click();
+  await expect(page.getByText('No profiles yet.')).toBeVisible();
+  await page.getByRole('link', { name: 'Add your first profile' }).click();
+  await page.getByText('Facebook, LinkedIn, TikTok and other platforms').click();
   await page.locator('#handle:visible').fill('@canna_de_e2e');
   await page.getByRole('button', { name: 'Add profile' }).click();
   await expect(page.locator('#platformKey-error:visible')).toHaveText('Choose a platform');
@@ -100,9 +101,7 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
     .getByRole('button', { name: 'Deactivate' })
     .click();
   await expect(
-    page
-      .getByText('No social accounts yet.')
-      .or(page.getByText('No accounts match these filters.')),
+    page.getByText('No profiles yet.').or(page.getByText('No accounts match these filters.')),
   ).toBeVisible();
   await page.goto(`/${slug}/accounts?status=all`);
   const inactive = page.getByRole('row', { name: /CANNA Germany E2E/ });
@@ -228,10 +227,21 @@ test('public profiles: viewer setup explained, bulk add, observed history, remov
   await expect(page.getByText('viewer account').first()).toBeVisible();
   await expect(page.getByText(/No Instagram professional account is connected yet/)).toBeVisible();
 
-  // Without a viewer, profiles can be added but previews are off.
+  // Without the Meta app, Instagram profiles can be added but not read; the page says so.
   await page.goto(`/${org.slug}/accounts/new`);
-  await expect(page.getByRole('link', { name: 'choose a viewer account' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0);
+  await expect(page.getByText(/Scopie can.t read Instagram yet/)).toBeVisible();
+  await page.getByLabel('2. Find the profile').fill('https://www.instagram.com/solo_rival_e2e/');
+  await page.getByRole('button', { name: 'Use this username' }).click();
+  await expect(page.getByText('Not checked yet')).toBeVisible();
+  await page.getByRole('button', { name: 'Start tracking @solo_rival_e2e' }).click();
+  await expect(page).toHaveURL(/\/accounts\/[0-9a-f-]{36}\?added=1$/);
+  await expect(
+    page.getByText(/Scopie can.t read Instagram yet, so this profile has no numbers/),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sync now' })).toHaveCount(0);
+
+  await page.goto(`/${org.slug}/accounts/new`);
+  await page.getByText('Add several profiles at once').click();
   await page.locator('#bulk-handles:visible').fill('rival_one_e2e,NL\n@rival_two_e2e\nnot valid!');
   await page.getByRole('button', { name: 'Add all' }).click();
   await expect(page.getByText(/Added 2 profiles, skipped 1/)).toBeVisible();
@@ -342,6 +352,7 @@ test('YouTube channels without OAuth, ranked in benchmarks only on what was obse
   ).toBeVisible();
 
   await page.goto(`/${org.slug}/accounts/new`);
+  await page.getByText('Add several profiles at once').click();
   await page.locator('#bulk-platform:visible').selectOption('youtube');
   await page
     .locator('#bulk-handles:visible')

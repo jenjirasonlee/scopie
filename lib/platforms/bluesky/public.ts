@@ -10,6 +10,7 @@ import type {
   PublicObservation,
   PublicPostPage,
   PublicProfile,
+  ProfileSearchResult,
   PublicProfileCollector,
   RawPayload,
 } from '../types';
@@ -20,6 +21,7 @@ import type {
  * count the AppView leaves out is reported as unavailable, never as 0.
  * https://docs.bsky.app/docs/api/app-bsky-actor-get-profile
  * https://docs.bsky.app/docs/api/app-bsky-feed-get-author-feed
+ * https://docs.bsky.app/docs/api/app-bsky-actor-search-actors-typeahead
  *
  * Accounts that ask apps not to show them to logged-out users (the `!no-unauthenticated`
  * label) are not read.
@@ -68,6 +70,11 @@ const profileSchema = z.object({
   followsCount: z.number().optional(),
   postsCount: z.number().optional(),
   labels: labelsSchema,
+});
+
+const profilesSchema = z.object({ profiles: z.array(profileSchema) });
+const typeaheadSchema = z.object({
+  actors: z.array(z.object({ did: z.string(), labels: labelsSchema })),
 });
 
 const embedSchema = z
@@ -262,8 +269,12 @@ export class BlueskyPublicCollector implements PublicProfileCollector {
   }
 
   private async get(method: string, params: Record<string, string>, handle: string) {
+    return this.getQuery(method, new URLSearchParams(params), handle);
+  }
+
+  private async getQuery(method: string, params: URLSearchParams, handle: string) {
     const url = new URL(`${BASE}/${method}`);
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+    url.search = params.toString();
     const response = await fetchWithRetry(
       url.toString(),
       { method: 'GET', headers: { Accept: 'application/json' } },
@@ -321,6 +332,46 @@ export class BlueskyPublicCollector implements PublicProfileCollector {
       // An empty page with a cursor would loop; the feed has ended.
       nextCursor: body.feed.length ? (body.cursor ?? null) : null,
     };
+  }
+
+  /** Profiles matching a name or handle: typeahead search, then their public counts. */
+  async searchProfiles(
+    _ctx: PublicContext,
+    query: string,
+    limit: number,
+  ): Promise<ProfileSearchResult[]> {
+    const found = parse(
+      typeaheadSchema,
+      await this.get(
+        'app.bsky.actor.searchActorsTypeahead',
+        { q: query, limit: String(limit) },
+        query,
+      ),
+      'search',
+    );
+    const visible = (labels: { val: string }[] | undefined) =>
+      !labels?.some((label) => label.val === NO_LOGGED_OUT);
+    const dids = found.actors.filter((actor) => visible(actor.labels)).map((actor) => actor.did);
+    if (!dids.length) return [];
+    const url = new URLSearchParams();
+    for (const did of dids) url.append('actors', did);
+    const body = parse(
+      profilesSchema,
+      await this.getQuery('app.bsky.actor.getProfiles', url, query),
+      'profiles',
+    );
+    return body.profiles
+      .filter((profile) => visible(profile.labels))
+      .map((profile) => {
+        const mapped = toProfile(profile);
+        return {
+          externalId: mapped.externalId,
+          username: mapped.username,
+          displayName: mapped.displayName,
+          profilePictureUrl: mapped.profilePictureUrl,
+          followers: profile.followersCount ?? null,
+        };
+      });
   }
 
   async lookupProfile(_ctx: PublicContext, handle: string) {

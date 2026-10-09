@@ -77,15 +77,20 @@ same page.
 
 **One profile at a time:**
 
-1. Open **Accounts → Add profile**.
-2. Under **Public Instagram profile**, type the username (with or without `@`, or paste the profile
-   link) and click **Preview**.
-3. Scopie shows the profile's name, followers and post count, and what it can and can't track.
-4. Choose **Why you track it** (Own profile, Competitor, Industry, Influencer / creator, Other) and,
-   if you like, a country.
+1. Open **Accounts → Add profile** and choose **Instagram**.
+2. Paste the profile link, or type the exact username (with or without `@`), and click **Check**.
+   Instagram's API can't search by name, so the exact username is needed; the page links to a
+   Google search to help find it.
+3. Scopie shows the profile's name, followers and post count. **What Scopie can and can't see**
+   lists what it tracks.
+4. Choose **Why do you track it?** (Own profile, Competitor, Industry, Influencer / creator, Other)
+   and, if you like, a country.
 5. Click **Start tracking**.
 
-**Many at once:** on the same page, under **Add several Instagram profiles**, paste one username per
+If Instagram isn't set up on the server yet, the button reads **Use this username** instead of
+**Check**: the profile is saved, and both the add page and the profile page say what is missing.
+
+**Many at once:** on the same page, open **Add several profiles at once**, paste one username per
 line, or upload a CSV file. You can add a country code after a comma, for example `hydro_rival,NL`.
 Choose why you track them and click **Add all**. Up to 200 at a time. No preview is made; each
 profile is checked on its first sync.
@@ -189,9 +194,9 @@ server is enough.
 
 ### Add channels
 
-On **Accounts → Add profile**, choose **YouTube** and type the channel's handle (`@brandname`) or
-paste a channel link. **Preview** shows the channel before you save it. Bulk add works the same way:
-pick YouTube as the platform.
+On **Accounts → Add profile**, choose **YouTube**, type the brand's name and click **Search**, then
+choose the channel from the results. A handle (`@brandname`) or a channel link works too. Bulk add
+works the same way: pick YouTube as the platform.
 
 ### What can and can't be tracked
 
@@ -212,7 +217,8 @@ pick YouTube as the platform.
 ### Limits
 
 Google gives each project 10,000 units a day, and each read costs 1 unit. 30 channels use well under
-a tenth of that. If the limit is reached, Scopie waits and tries again later.
+a tenth of that. A search by name costs 100 units, so each organization can search 40 times a day;
+pasting a channel link always works. If the limit is reached, Scopie waits and tries again later.
 
 ## X key
 
@@ -244,7 +250,7 @@ roughly $1.20 a day. Post history starts on the day you add a profile (up to 30 
 ## Bluesky
 
 Bluesky needs nothing: no key, no app and no login. Choose **Bluesky** on **Accounts → Add profile**
-and type the handle (`brand.bsky.social` or a custom domain such as `brand.com`) or paste a
+and start typing a name; matching profiles appear as you type. You can also type the handle (`brand.bsky.social` or a custom domain such as `brand.com`) or paste a
 `bsky.app` profile link. Bluesky doesn't count views, so Scopie shows none. Accounts that ask apps
 not to show them to logged-out people are not read.
 

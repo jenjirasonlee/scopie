@@ -191,3 +191,48 @@ describe('YouTube in the rest of Scopie', () => {
     });
   });
 });
+
+describe('YouTube channel search', () => {
+  it('finds channels by name, keeps YouTube’s order and reads their subscriber counts', async () => {
+    const yt = fakeYouTube((url) => {
+      if (url.pathname.endsWith('/search'))
+        return {
+          status: 200,
+          body: {
+            items: [
+              { id: { kind: 'youtube#channel', channelId: 'UCfixture000000000000001' } },
+              { id: { kind: 'youtube#channel', channelId: 'UCfixture000000000000404' } },
+            ],
+          },
+        };
+      return standard(url);
+    });
+    const collector = new YouTubePublicCollector(yt.http);
+    const hits = await collector.searchProfiles(ctx, 'example grow', 8);
+    const search = yt.calls[0]!.url;
+    expect(search.searchParams.get('type')).toBe('channel');
+    expect(search.searchParams.get('q')).toBe('example grow');
+    expect(search.toString()).not.toContain(KEY);
+    expect(yt.calls[1]!.url.searchParams.get('id')).toBe(
+      'UCfixture000000000000001,UCfixture000000000000404',
+    );
+    // A channel YouTube didn't return details for is left out, not shown with zeros.
+    expect(hits).toEqual([
+      {
+        externalId: 'UCfixture000000000000001',
+        username: 'examplegrow',
+        displayName: 'Example Grow Channel (fixture)',
+        profilePictureUrl: 'https://yt3.example.com/fixture.jpg',
+        followers: 21300,
+      },
+    ]);
+    // The search costs 100 quota units, the channel details 1.
+    expect(collector.unitsUsed).toBe(101);
+  });
+
+  it('makes no second call when nothing matches', async () => {
+    const yt = fakeYouTube(() => ({ status: 200, body: { items: [] } }));
+    expect(await new YouTubePublicCollector(yt.http).searchProfiles(ctx, 'nothing', 8)).toEqual([]);
+    expect(yt.calls).toHaveLength(1);
+  });
+});

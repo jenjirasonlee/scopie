@@ -120,6 +120,17 @@ export type PublicProfile = {
   profilePictureUrl: string | null;
 };
 
+/** A profile found by searching a platform by name, for the "add profile" search. */
+export type ProfileSearchResult = {
+  externalId: string;
+  /** What Scopie stores as the handle: @handle without the @, or a domain handle. */
+  username: string;
+  displayName: string | null;
+  profilePictureUrl: string | null;
+  /** Followers or subscribers as the platform shows them; null when not public. */
+  followers: number | null;
+};
+
 /** A post with the public metrics read in the same call, as of `observedAt`. */
 export type PublicPostPage = {
   posts: NormalizedPost[];
@@ -180,6 +191,11 @@ export interface PublicProfileCollector {
     asOf: string,
     plan?: PublicReadPlan,
   ): Promise<PublicObservation>;
+  /**
+   * Finds public profiles by name, for platforms whose official API offers a search with the
+   * credential Scopie has (YouTube, Bluesky). Instagram and X don't, so they leave it out.
+   */
+  searchProfiles?(ctx: PublicContext, query: string, limit: number): Promise<ProfileSearchResult[]>;
   /** Older posts, newest first, with their metrics as of now. */
   listPosts(ctx: PublicContext, handle: string, cursor: string | null): Promise<PublicPostPage>;
   /**
