@@ -1,7 +1,7 @@
 import 'server-only';
 import { loadBenchmarkData } from '@/lib/analytics/queries';
 import { DAY_MS } from '@/lib/analytics/range';
-import { createClient } from '@/lib/db/server';
+import { createClient, type ServerClient } from '@/lib/db/server';
 import {
   computeCoverage,
   strategyPeriod,
@@ -30,13 +30,15 @@ export async function measureStrategy(input: {
   timeZone: string;
   strategy: StrategyForMeasure;
   now?: Date;
+  /** Another client, e.g. the service role for scheduled jobs. Defaults to the signed-in user. */
+  db?: ServerClient;
 }): Promise<StrategyMeasures> {
   const now = input.now ?? new Date();
   const { strategy, timeZone } = input;
   const period = strategyPeriod(strategy, timeZone);
   const from = period.start.toISOString();
   const to = period.end.toISOString();
-  const supabase = await createClient();
+  const supabase = input.db ?? (await createClient());
 
   const [items, pillarRows] = await Promise.all([
     supabase
@@ -83,6 +85,7 @@ export async function measureStrategy(input: {
       isDemoOrg: input.isDemoOrg,
       days: Math.max(1, Math.ceil(daysBack / 2) + 1),
       now,
+      db: input.db,
     });
     profiles = [...data.data.values()];
   }

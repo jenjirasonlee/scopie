@@ -715,14 +715,14 @@ isOneToOne: false
                   ]
                 },"notifications": {
                   Row: {
-                    "actor_id": string | null,"content_item_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"kind": string,"organization_id": string,"read_at": string | null,"user_id": string
+                    "actor_id": string | null,"content_item_id": string | null,"created_at": string,"excerpt": string | null,"id": string,"kind": string,"organization_id": string,"read_at": string | null,"report_id": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "actor_id"?: string | null,"content_item_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"kind": string,"organization_id": string,"read_at"?: string | null,"user_id": string
+                    "actor_id"?: string | null,"content_item_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"kind": string,"organization_id": string,"read_at"?: string | null,"report_id"?: string | null,"user_id": string
                   }
                   Update: {
-                    "actor_id"?: string | null,"content_item_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"kind"?: string,"organization_id"?: string,"read_at"?: string | null,"user_id"?: string
+                    "actor_id"?: string | null,"content_item_id"?: string | null,"created_at"?: string,"excerpt"?: string | null,"id"?: string,"kind"?: string,"organization_id"?: string,"read_at"?: string | null,"report_id"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -743,6 +743,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "organizations"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_report_id_organization_id_fkey"
+      columns: ["report_id","organization_id"]
+isOneToOne: false
+      referencedRelation: "reports"
+      referencedColumns: ["id","organization_id"]
     },{
       foreignKeyName: "notifications_user_id_fkey"
       columns: ["user_id"]
@@ -1176,6 +1182,38 @@ isOneToOne: false
       columns: ["sync_run_id"]
 isOneToOne: false
       referencedRelation: "sync_runs"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"reports": {
+                  Row: {
+                    "analysis_run_id": string | null,"created_at": string,"created_by": string | null,"data_source": Database["public"]['Enums']["data_source"],"id": string,"kind": string,"made_by": Database["public"]['Enums']["report_trigger"],"organization_id": string,"period_end": string,"period_start": string,"snapshot": NonNullable<Json>,"time_zone": string,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "analysis_run_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"data_source": Database["public"]['Enums']["data_source"],"id"?: string,"kind"?: string,"made_by": Database["public"]['Enums']["report_trigger"],"organization_id": string,"period_end": string,"period_start": string,"snapshot": NonNullable<Json>,"time_zone": string,"title": string
+                  }
+                  Update: {
+                    "analysis_run_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"data_source"?: Database["public"]['Enums']["data_source"],"id"?: string,"kind"?: string,"made_by"?: Database["public"]['Enums']["report_trigger"],"organization_id"?: string,"period_end"?: string,"period_start"?: string,"snapshot"?: NonNullable<Json>,"time_zone"?: string,"title"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reports_analysis_run_id_organization_id_fkey"
+      columns: ["analysis_run_id","organization_id"]
+isOneToOne: false
+      referencedRelation: "analysis_runs"
+      referencedColumns: ["id","organization_id"]
+    },{
+      foreignKeyName: "reports_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "reports_organization_id_fkey"
+      columns: ["organization_id"]
+isOneToOne: false
+      referencedRelation: "organizations"
       referencedColumns: ["id"]
     }
                   ]
@@ -1647,7 +1685,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "account_connection_status": "not_connected"|"connected"|"needs_reauth"|"error"|"demo","analysis_run_status": "succeeded"|"failed","analysis_writer": "rules"|"model","business_role": "owned"|"competitor"|"industry"|"influencer"|"other","connection_status": "active"|"needs_reauth"|"revoked"|"error","content_status": "IDEA"|"DRAFT"|"IN_REVIEW"|"CHANGES_REQUESTED"|"APPROVED"|"SCHEDULED"|"PUBLISHED"|"ANALYSED"|"REJECTED"|"ARCHIVED","data_source": "live_public"|"live_connected"|"imported"|"estimated"|"demo","import_kind": "account_metrics"|"posts","import_status": "processing"|"completed"|"completed_with_errors"|"failed","insight_severity": "info"|"notable"|"important","language_source": "declared"|"account_default"|"detected","media_format": "image"|"carousel"|"short_video"|"long_video"|"video"|"text"|"link"|"story"|"live"|"other","metric_aggregation": "sum"|"last"|"recompute"|"not_additive","metric_availability": "available"|"not_permitted"|"not_applicable"|"pending"|"error"|"hidden_by_owner"|"not_public","metric_period": "lifetime"|"day","metric_scope": "account"|"post","metric_unit": "count"|"percent"|"seconds","org_role": "OWNER"|"ADMIN"|"MANAGER"|"EDITOR"|"VIEWER","platform_data_status": "available"|"planned"|"not_available","profile_access_type": "public"|"connected"|"imported"|"demo","recommendation_confidence": "low"|"medium"|"high","recommendation_status": "open"|"accepted"|"dismissed"|"done","review_decision": "APPROVED"|"CHANGES_REQUESTED"|"REJECTED","strategy_kpi": "published_content"|"posts_per_week"|"follower_growth"|"manual","strategy_status": "draft"|"active"|"archived","sync_job_type": "account_daily"|"posts_incremental"|"post_metrics_refresh"|"backfill"|"public_profile_daily"|"public_posts_refresh"|"public_backfill","sync_status": "queued"|"running"|"succeeded"|"partial"|"failed"|"cancelled","sync_trigger": "schedule"|"manual"|"retry","tag_source": "content_item"|"manual"|"imported"|"ai_suggested"|"ai_confirmed"
+            "account_connection_status": "not_connected"|"connected"|"needs_reauth"|"error"|"demo","analysis_run_status": "succeeded"|"failed","analysis_writer": "rules"|"model","business_role": "owned"|"competitor"|"industry"|"influencer"|"other","connection_status": "active"|"needs_reauth"|"revoked"|"error","content_status": "IDEA"|"DRAFT"|"IN_REVIEW"|"CHANGES_REQUESTED"|"APPROVED"|"SCHEDULED"|"PUBLISHED"|"ANALYSED"|"REJECTED"|"ARCHIVED","data_source": "live_public"|"live_connected"|"imported"|"estimated"|"demo","import_kind": "account_metrics"|"posts","import_status": "processing"|"completed"|"completed_with_errors"|"failed","insight_severity": "info"|"notable"|"important","language_source": "declared"|"account_default"|"detected","media_format": "image"|"carousel"|"short_video"|"long_video"|"video"|"text"|"link"|"story"|"live"|"other","metric_aggregation": "sum"|"last"|"recompute"|"not_additive","metric_availability": "available"|"not_permitted"|"not_applicable"|"pending"|"error"|"hidden_by_owner"|"not_public","metric_period": "lifetime"|"day","metric_scope": "account"|"post","metric_unit": "count"|"percent"|"seconds","org_role": "OWNER"|"ADMIN"|"MANAGER"|"EDITOR"|"VIEWER","platform_data_status": "available"|"planned"|"not_available","profile_access_type": "public"|"connected"|"imported"|"demo","recommendation_confidence": "low"|"medium"|"high","recommendation_status": "open"|"accepted"|"dismissed"|"done","report_trigger": "schedule"|"manual","review_decision": "APPROVED"|"CHANGES_REQUESTED"|"REJECTED","strategy_kpi": "published_content"|"posts_per_week"|"follower_growth"|"manual","strategy_status": "draft"|"active"|"archived","sync_job_type": "account_daily"|"posts_incremental"|"post_metrics_refresh"|"backfill"|"public_profile_daily"|"public_posts_refresh"|"public_backfill","sync_status": "queued"|"running"|"succeeded"|"partial"|"failed"|"cancelled","sync_trigger": "schedule"|"manual"|"retry","tag_source": "content_item"|"manual"|"imported"|"ai_suggested"|"ai_confirmed"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1763,7 +1801,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "account_connection_status": ["not_connected", "connected", "needs_reauth", "error", "demo"],"analysis_run_status": ["succeeded", "failed"],"analysis_writer": ["rules", "model"],"business_role": ["owned", "competitor", "industry", "influencer", "other"],"connection_status": ["active", "needs_reauth", "revoked", "error"],"content_status": ["IDEA", "DRAFT", "IN_REVIEW", "CHANGES_REQUESTED", "APPROVED", "SCHEDULED", "PUBLISHED", "ANALYSED", "REJECTED", "ARCHIVED"],"data_source": ["live_public", "live_connected", "imported", "estimated", "demo"],"import_kind": ["account_metrics", "posts"],"import_status": ["processing", "completed", "completed_with_errors", "failed"],"insight_severity": ["info", "notable", "important"],"language_source": ["declared", "account_default", "detected"],"media_format": ["image", "carousel", "short_video", "long_video", "video", "text", "link", "story", "live", "other"],"metric_aggregation": ["sum", "last", "recompute", "not_additive"],"metric_availability": ["available", "not_permitted", "not_applicable", "pending", "error", "hidden_by_owner", "not_public"],"metric_period": ["lifetime", "day"],"metric_scope": ["account", "post"],"metric_unit": ["count", "percent", "seconds"],"org_role": ["OWNER", "ADMIN", "MANAGER", "EDITOR", "VIEWER"],"platform_data_status": ["available", "planned", "not_available"],"profile_access_type": ["public", "connected", "imported", "demo"],"recommendation_confidence": ["low", "medium", "high"],"recommendation_status": ["open", "accepted", "dismissed", "done"],"review_decision": ["APPROVED", "CHANGES_REQUESTED", "REJECTED"],"strategy_kpi": ["published_content", "posts_per_week", "follower_growth", "manual"],"strategy_status": ["draft", "active", "archived"],"sync_job_type": ["account_daily", "posts_incremental", "post_metrics_refresh", "backfill", "public_profile_daily", "public_posts_refresh", "public_backfill"],"sync_status": ["queued", "running", "succeeded", "partial", "failed", "cancelled"],"sync_trigger": ["schedule", "manual", "retry"],"tag_source": ["content_item", "manual", "imported", "ai_suggested", "ai_confirmed"]
+            "account_connection_status": ["not_connected", "connected", "needs_reauth", "error", "demo"],"analysis_run_status": ["succeeded", "failed"],"analysis_writer": ["rules", "model"],"business_role": ["owned", "competitor", "industry", "influencer", "other"],"connection_status": ["active", "needs_reauth", "revoked", "error"],"content_status": ["IDEA", "DRAFT", "IN_REVIEW", "CHANGES_REQUESTED", "APPROVED", "SCHEDULED", "PUBLISHED", "ANALYSED", "REJECTED", "ARCHIVED"],"data_source": ["live_public", "live_connected", "imported", "estimated", "demo"],"import_kind": ["account_metrics", "posts"],"import_status": ["processing", "completed", "completed_with_errors", "failed"],"insight_severity": ["info", "notable", "important"],"language_source": ["declared", "account_default", "detected"],"media_format": ["image", "carousel", "short_video", "long_video", "video", "text", "link", "story", "live", "other"],"metric_aggregation": ["sum", "last", "recompute", "not_additive"],"metric_availability": ["available", "not_permitted", "not_applicable", "pending", "error", "hidden_by_owner", "not_public"],"metric_period": ["lifetime", "day"],"metric_scope": ["account", "post"],"metric_unit": ["count", "percent", "seconds"],"org_role": ["OWNER", "ADMIN", "MANAGER", "EDITOR", "VIEWER"],"platform_data_status": ["available", "planned", "not_available"],"profile_access_type": ["public", "connected", "imported", "demo"],"recommendation_confidence": ["low", "medium", "high"],"recommendation_status": ["open", "accepted", "dismissed", "done"],"report_trigger": ["schedule", "manual"],"review_decision": ["APPROVED", "CHANGES_REQUESTED", "REJECTED"],"strategy_kpi": ["published_content", "posts_per_week", "follower_growth", "manual"],"strategy_status": ["draft", "active", "archived"],"sync_job_type": ["account_daily", "posts_incremental", "post_metrics_refresh", "backfill", "public_profile_daily", "public_posts_refresh", "public_backfill"],"sync_status": ["queued", "running", "succeeded", "partial", "failed", "cancelled"],"sync_trigger": ["schedule", "manual", "retry"],"tag_source": ["content_item", "manual", "imported", "ai_suggested", "ai_confirmed"]
           }
         }
 } as const

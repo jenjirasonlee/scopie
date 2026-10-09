@@ -251,8 +251,10 @@ export async function loadBenchmarkData(input: {
   isDemoOrg: boolean;
   days: number;
   now: Date;
+  /** Another client, e.g. the service role for scheduled jobs. Defaults to the signed-in user. */
+  db?: ServerClient;
 }): Promise<BenchmarkData> {
-  const supabase = await createClient();
+  const supabase = input.db ?? (await createClient());
   const source = comparisonSource(input.isDemoOrg);
   const { previous } = periodsFor(input.now, input.days);
   const since = new Date(previous.start.getTime() - ENGAGEMENT_AGE_DAYS * DAY_MS);

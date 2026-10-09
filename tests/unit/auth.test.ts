@@ -45,5 +45,7 @@ describe('protected routes', () => {
     expect(isPublicPath('/onboarding')).toBe(false);
     expect(isPublicPath('/canna/dashboard')).toBe(false);
     expect(isPublicPath('/sign-in-hack')).toBe(false);
+    expect(isPublicPath('/api/reports/weekly')).toBe(true);
+    expect(isPublicPath('/api/content-assets')).toBe(false);
   });
 });

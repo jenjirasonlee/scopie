@@ -14,6 +14,7 @@ Migrations:
 - `supabase/migrations/20261011000100_review_approval.sql` (Phase 6, Review + approval; §6)
 - `supabase/migrations/20261012000100_content_strategy.sql` (Phase 7, Content strategy; §6)
 - `supabase/migrations/20261013000100_ai_analyst.sql` (Phase 8, AI analyst + recommendations; §8.4)
+- `supabase/migrations/20261014000100_weekly_reports.sql` (Phase 9, Weekly intelligence reports; §8.5)
 
 Phase 1:
 
@@ -760,11 +761,7 @@ create table ai_recommendations (id uuid pk, organization_id uuid, generation_id
   status text default 'open',            -- open, accepted, dismissed, done
   decided_by uuid, decided_at timestamptz, created_at timestamptz);
 
--- Phase 9: Weekly intelligence reports
-create table reports (id uuid pk, organization_id uuid, kind text, period_start date, period_end date,
-  title text, status text, generation_id uuid, data_snapshot jsonb, created_by uuid, created_at timestamptz);
-create table report_sections (id uuid pk, report_id uuid, organization_id uuid, position int,
-  kind text, title text, body jsonb);
+-- Phase 9: Weekly intelligence reports. Built as one snapshot per report; see §8.5.
 
 -- notifications: built in Phase 6 (§6).
 ```
@@ -779,6 +776,15 @@ create table report_sections (id uuid pk, report_id uuid, organization_id uuid, 
 - `ai_recommendations`: title, observation, recommendation, expected impact, `confidence` and `confidence_basis` (computed by `lib/ai/confidence.ts`), `signal_ids`, `evidence`, `account_ids`, `experiment`, and `status` (`open`, `accepted`, `dismissed`, `done`) with note, who and when.
 - `content_items.source_recommendation_id`: set when an idea is created from a recommendation; users can't change it afterwards.
 - Members read runs, insights and recommendations. Nobody writes them through the API: the server saves them with the service role after checking `strategy.manage`. `set_recommendation_status(id, status, note)` (EDITOR+, `content.edit`) changes only the status and note.
+
+### 8.5 Weekly reports (implemented, Phase 9)
+
+`…_weekly_reports.sql`:
+
+- `reports`: one per organization per week (`unique (organization_id, kind, period_start)`). `period_start` is a Monday and `period_end` the Sunday after, in `time_zone` (the organization's time zone when the report was made). `data_source` (`demo` for the DEMO organization), `title`, `made_by` (`schedule` or `manual`), `created_by` (null for the schedule), `analysis_run_id` (the analysis whose insights and actions it quotes; set to null if that run is deleted, the snapshot keeps the text).
+- `snapshot` (jsonb): the whole report as built by `lib/reports/build.ts` (`ReportSnapshot` in `lib/reports/types.ts`, with a `version`). Numbers and sentences are frozen when the report is made and never recomputed. Values that couldn't be measured are stored as null with the reason, never as 0.
+- `notifications.report_id` and the `report_ready` kind: every member is told in the app when a report is made.
+- Members read reports. Nobody writes them through the API: the server makes them with the service role (the hourly schedule, or a manager after a `strategy.manage` check).
 
 ## 9. Indexing and scale plan
 

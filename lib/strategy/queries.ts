@@ -1,5 +1,5 @@
 import 'server-only';
-import { createClient } from '@/lib/db/server';
+import { createClient, type ServerClient } from '@/lib/db/server';
 import { isPillarColor, type PillarColor } from '@/lib/taxonomy/shared';
 import { compareStrategies, type StrategyKpi, type StrategyStatus } from './shared';
 
@@ -67,8 +67,8 @@ const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 
 /** Every strategy of the organization: active first, then drafts, then archived. */
-export async function listStrategies(orgId: string): Promise<StrategySummary[]> {
-  const supabase = await createClient();
+export async function listStrategies(orgId: string, db?: ServerClient): Promise<StrategySummary[]> {
+  const supabase = db ?? (await createClient());
   const { data, error } = await supabase
     .from('strategies')
     .select(
@@ -93,8 +93,12 @@ export async function listStrategies(orgId: string): Promise<StrategySummary[]> 
     .sort(compareStrategies);
 }
 
-export async function getStrategy(orgId: string, id: string): Promise<StrategyDetail | null> {
-  const supabase = await createClient();
+export async function getStrategy(
+  orgId: string,
+  id: string,
+  db?: ServerClient,
+): Promise<StrategyDetail | null> {
+  const supabase = db ?? (await createClient());
   const { data: row, error } = await supabase
     .from('strategies')
     .select('*')
