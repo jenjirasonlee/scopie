@@ -1,5 +1,6 @@
-import { Info, Sparkles } from 'lucide-react';
+import { Info, MessagesSquare, Sparkles } from 'lucide-react';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import {
   InsightCard,
   RecommendationCard,
@@ -9,6 +10,7 @@ import { RunAnalysisForm } from '@/components/insights/insight-forms';
 import { DataSourceBadge } from '@/components/pipeline/data-source-badge';
 import { PageHeader } from '@/components/shared/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { runAnalysisAction } from '@/lib/ai/actions';
 import {
@@ -92,18 +94,26 @@ export default async function InsightsPage({
           </span>
         }
         actions={
-          setup ? (
-            setup.canRun ? (
-              <RunAnalysisForm
-                action={runAnalysisAction.bind(null, orgSlug)}
-                label={latest ? 'Run analysis again' : 'Run analysis'}
-              />
-            ) : (
-              <p className="text-muted-foreground max-w-xs text-xs">
-                Analysis can’t run yet. The server is missing: {setup.missing.join(', ')}.
-              </p>
-            )
-          ) : null
+          <div className="flex flex-wrap items-start gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/${orgSlug}/insights/chat`}>
+                <MessagesSquare aria-hidden />
+                Ask Scopie
+              </Link>
+            </Button>
+            {setup ? (
+              setup.canRun ? (
+                <RunAnalysisForm
+                  action={runAnalysisAction.bind(null, orgSlug)}
+                  label={latest ? 'Run analysis again' : 'Run analysis'}
+                />
+              ) : (
+                <p className="text-muted-foreground max-w-xs text-xs">
+                  Analysis can’t run yet. The server is missing: {setup.missing.join(', ')}.
+                </p>
+              )
+            ) : null}
+          </div>
         }
       />
 

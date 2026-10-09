@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { ContentAssets } from '@/components/content/content-assets';
 import { ContentComments } from '@/components/content/content-comments';
 import { ContentForm } from '@/components/content/content-form';
+import { SuggestCopyPanel } from '@/components/insights/suggest-copy-panel';
 import { ReviewHistory } from '@/components/content/review-history';
 import { ReviewPanel } from '@/components/content/review-panel';
 import { PageHeader } from '@/components/shared/page-header';
@@ -13,6 +14,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { chooseSuggestionAction, suggestCopyAction } from '@/lib/ai/assistant-actions';
+import { aiSetup } from '@/lib/ai/chat/run';
 import { getSourceRecommendation } from '@/lib/ai/queries';
 import { recommendationTabHref } from '@/lib/ai/shared';
 import { getReviewActivity } from '@/lib/approvals/queries';
@@ -92,6 +95,10 @@ export default async function ContentItemPage({
     : null;
   const dateLabel = (iso: string) => formatDateTime(iso, org.default_timezone);
   const { latestDecision } = activity;
+  // The content assistant: editors and up, on the current version while it can be edited.
+  const showAssistant =
+    canEdit && isCurrentVersion && isEditableStatus(item.status) && !currentSubmitted;
+  const assistant = showAssistant ? aiSetup() : null;
   const uploaded = Number(single(search.uploaded) ?? 0);
   const uploadError = single(search.uploadError)?.slice(0, 300);
 
@@ -169,6 +176,15 @@ export default async function ContentItemPage({
           <CheckCircle2 aria-hidden />
           <AlertDescription>
             Started version {versions[0]?.version_number}. The previous version is kept as it was.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {single(search.suggested) ? (
+        <Alert variant="success">
+          <CheckCircle2 aria-hidden />
+          <AlertDescription>
+            Saved the suggested caption as version {versions[0]?.version_number}, a draft. The
+            previous version is kept as it was. Check it, then submit it for review as usual.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -261,6 +277,15 @@ export default async function ContentItemPage({
               />
             </CardContent>
           </Card>
+
+          {assistant ? (
+            <SuggestCopyPanel
+              modelReady={assistant.modelReady}
+              missing={can(role, 'strategy.manage') ? assistant.missing : null}
+              suggestAction={suggestCopyAction.bind(null, orgSlug, item.id)}
+              chooseAction={chooseSuggestionAction.bind(null, orgSlug, item.id)}
+            />
+          ) : null}
 
           <ContentAssets
             orgSlug={orgSlug}

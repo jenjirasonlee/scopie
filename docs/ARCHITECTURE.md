@@ -5,7 +5,7 @@
 
 ## 0. Implementation status
 
-Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Public profile intelligence ✅ · 4 Benchmarking + YouTube · 5 Content management + calendar · 6 Review + approval · 7 Content strategy ✅ · 8 AI analyst + recommendations ✅ · 9 Weekly intelligence reports ✅ · 10 More platforms ✅ · 11 Productivity + career intelligence. See ROADMAP.md.
+Roadmap: 1 Foundation ✅ · 2 Real social data pipeline ✅ · 3 Public profile intelligence ✅ · 4 Benchmarking + YouTube · 5 Content management + calendar · 6 Review + approval · 7 Content strategy ✅ · 8 AI analyst + recommendations ✅ · 9 Weekly intelligence reports ✅ · 10 More platforms ✅ · 11 Productivity + career intelligence ✅. See ROADMAP.md.
 
 **Product focus (2026-10-07):** Scopie is first a public social intelligence and competitor monitoring tool. Public profiles are observed through official APIs without the owner's authorization; OAuth connections are optional enrichment for CANNA-owned accounts. The core product must work without CANNA Meta Business admin access. See §2a.
 
@@ -41,7 +41,7 @@ What exists in code today:
 | AI analyst: signals with evidence, rules or model writer, recommendations                            | `…_ai_analyst.sql`, `lib/ai/`, `components/insights/`, `app/[orgSlug]/insights/`                                    |
 | Unit, database integration and Playwright tests; CI                                                  | `tests/`, `.github/workflows/ci.yml`                                                                                |
 
-Not implemented yet: report PDF export and email delivery, connectors other than Meta, public data for platforms other than Instagram, YouTube, X and Bluesky, email notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
+Not implemented yet: report email delivery, connectors other than Meta, public data for platforms other than Instagram, YouTube, X and Bluesky, email notifications, member invitations. The rest of this document describes the target architecture; those parts are planned. The data pipeline itself is described in [DATA_PIPELINE.md](DATA_PIPELINE.md), metrics in [METRICS.md](METRICS.md).
 
 ## 1. Repository inspection (initial design, before Phase 1)
 

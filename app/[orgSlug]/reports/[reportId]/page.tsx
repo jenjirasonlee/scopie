@@ -1,4 +1,4 @@
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft, FileDown, Info } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -65,6 +65,15 @@ export default async function ReportPage({
             </Button>
             <CopyLinkButton />
             <PrintButton />
+            {snapshot ? (
+              <Button asChild size="sm" variant="outline">
+                {/* A plain link: the browser downloads the file the route sends. */}
+                <a href={`/api/reports/${report.id}/pdf`} download>
+                  <FileDown aria-hidden />
+                  Download PDF
+                </a>
+              </Button>
+            ) : null}
           </div>
         }
       />

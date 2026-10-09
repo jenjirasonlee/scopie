@@ -645,3 +645,24 @@ test('managers make last week’s report; viewers are told and read it', async (
     viewerPage.getByRole('link', { name: /Weekly report, |Sept|Oct/ }).first(),
   ).toBeVisible();
 });
+
+test('ask Scopie a ready question without an AI key; productivity stays team-level', async ({
+  browser,
+}) => {
+  const owner = await createUser('e2e-asker');
+  const org = await createOrg(owner, 'Chat Org');
+
+  const page = await (await browser.newContext()).newPage();
+  await signIn(page, owner.email);
+  await page.goto(`/${org.slug}/insights`);
+  await page.getByRole('link', { name: 'Ask Scopie' }).click();
+  await page.getByRole('button', { name: 'Which competitors grew fastest?' }).click();
+  // The answer comes from Scopie's own rules and says what data it used.
+  await expect(page.getByText('Data used').first()).toBeVisible();
+  await expect(page.getByRole('textbox')).toBeDisabled();
+
+  await page.goto(`/${org.slug}/productivity`);
+  await expect(page.getByRole('heading', { name: 'Productivity' })).toBeVisible();
+  await page.goto(`/${org.slug}/productivity?view=you`);
+  await expect(page.getByText('Private: only you can see this.')).toBeVisible();
+});

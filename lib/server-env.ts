@@ -33,6 +33,10 @@ const serverEnvSchema = z.object({
   AI_MODEL_INSIGHTS: z.string().min(1).max(100).optional(),
   /** Analyses per organization per day that may call the model (default 20). */
   AI_MAX_RUNS_PER_DAY: z.coerce.number().int().min(0).max(1000).optional(),
+  /** The OpenAI model that answers typed chat questions and suggests copy. */
+  AI_MODEL_CHAT: z.string().min(1).max(100).optional(),
+  /** Model requests (chat questions and copy suggestions) per person per hour (default 20). */
+  AI_MAX_CHAT_PER_HOUR: z.coerce.number().int().min(0).max(1000).optional(),
   /** Shared secret the Monday report schedule sends to the app. At least 32 characters. */
   REPORTS_CRON_SECRET: z.string().min(32).optional(),
 });
@@ -67,6 +71,8 @@ export function serverEnv(): ServerEnv {
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     AI_MODEL_INSIGHTS: process.env.AI_MODEL_INSIGHTS,
     AI_MAX_RUNS_PER_DAY: process.env.AI_MAX_RUNS_PER_DAY,
+    AI_MODEL_CHAT: process.env.AI_MODEL_CHAT,
+    AI_MAX_CHAT_PER_HOUR: process.env.AI_MAX_CHAT_PER_HOUR,
     REPORTS_CRON_SECRET: process.env.REPORTS_CRON_SECRET,
   });
 }
