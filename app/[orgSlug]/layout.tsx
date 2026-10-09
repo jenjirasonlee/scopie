@@ -4,6 +4,7 @@ import { Topbar, TopbarSkeleton } from '@/components/layout/topbar';
 import { SidebarNav } from '@/components/layout/sidebar-nav';
 import { Logo } from '@/components/shared/logo';
 import { Skeleton } from '@/components/ui/skeleton';
+import { shellNavCounts } from '@/lib/notifications/queries';
 import { getOrgContext } from '@/lib/orgs/queries';
 
 export default function OrgLayout({
@@ -20,7 +21,7 @@ export default function OrgLayout({
           <Logo />
         </Link>
         <Suspense fallback={<NavSkeleton />}>
-          <SidebarNav />
+          <OrgSidebarNav params={params} />
         </Suspense>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -35,6 +36,11 @@ export default function OrgLayout({
       </div>
     </div>
   );
+}
+
+async function OrgSidebarNav({ params }: { params: Promise<{ orgSlug: string }> }) {
+  const { orgSlug } = await params;
+  return <SidebarNav counts={await shellNavCounts(orgSlug)} />;
 }
 
 /** Every page under /[orgSlug] renders only for members of that organization (404 otherwise). */

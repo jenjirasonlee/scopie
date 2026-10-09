@@ -83,7 +83,7 @@ export type ContentAsset = Tables<'content_assets'>;
 
 export type ContentVersionSummary = Pick<
   ContentVersion,
-  'id' | 'version_number' | 'created_at' | 'updated_at' | 'submitted_at'
+  'id' | 'version_number' | 'created_at' | 'updated_at' | 'submitted_at' | 'submitted_by'
 > & { authorName: string | null; assetCount: number };
 
 export type ContentDetail = {
@@ -148,6 +148,7 @@ export async function getContentDetail(
     created_at: version.created_at,
     updated_at: version.updated_at,
     submitted_at: version.submitted_at,
+    submitted_by: version.submitted_by,
   };
   return {
     item,
@@ -160,6 +161,7 @@ export async function getContentDetail(
       created_at: row.created_at,
       updated_at: row.updated_at,
       submitted_at: row.submitted_at,
+      submitted_by: row.submitted_by,
       authorName: row.author ? (row.author.full_name ?? row.author.email) : null,
       assetCount: row.content_assets[0]?.count ?? 0,
     })),

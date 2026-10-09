@@ -11,6 +11,7 @@ Migrations:
 - `supabase/migrations/20261008000100_public_intelligence.sql` (Phase 3, Public profile intelligence)
 - `supabase/migrations/20261009000100_youtube_public.sql` and `20261010000100_benchmark_group_managers.sql` (Phase 4)
 - `supabase/migrations/20261010000200_content_hub.sql` (Phase 5, Content management + calendar; §6)
+- `supabase/migrations/20261011000100_review_approval.sql` (Phase 6, Review + approval; §6)
 
 Phase 1:
 
@@ -58,7 +59,7 @@ Phase 3:
 Existing data was migrated in place: `authenticated` → `live_connected`, `public` → `live_public`,
 `manual` → `imported`; `is_competitor = true` → `competitor`, otherwise `owned`.
 
-Not yet created: invitations, notifications, everything content/approval/strategy beyond the minimal taxonomy (§6), benchmarks, AI and reports (§8.3).
+Not yet created: invitations, strategy, AI and reports (§8.3).
 
 How data moves through these tables end to end (sync schedule, failure handling) is in [DATA_PIPELINE.md](DATA_PIPELINE.md); what each metric means is in [METRICS.md](METRICS.md).
 
@@ -99,7 +100,7 @@ Global (not tenant-owned): platforms, platform_account_types, countries,
                            metric_definitions, platform_metric_map
 Read models (views): post_metrics_latest, post_metrics_at_age, account_metrics_daily
 
-Planned: invitations, content reviews and comments, strategies,
+Planned: invitations, strategies,
          ai_generations/insights/recommendations, reports, notifications
 ```
 
@@ -525,17 +526,41 @@ create table import_batches (
 
 CSV import (`lib/imports/`) runs as the signed-in user (`accounts.manage`, ADMIN+): it creates a batch, writes rows through ingest as `imported`, then finishes the batch. A trigger stops users changing a batch's identity fields or a finished batch. Batches are never deleted.
 
-## 6. Content, approvals, strategy (content implemented in Phase 5; approvals and strategy planned)
+## 6. Content, approvals, strategy (content in Phase 5, approvals in Phase 6; strategy planned)
 
 Implemented in `…_content_hub.sql`:
 
 - `content_pillars.color` (a fixed palette). `content_items`, `content_versions`, `content_assets` roughly as sketched below, with composite foreign keys to the organization's own taxonomy rows.
 - Version 1 is created by the database when an item is inserted, and set as `current_version_id`. New versions only through `create_content_version(item_id)`, which copies the text and file rows. No direct version inserts. Only the current, unsubmitted version can change.
-- Until Phase 6, status moves are limited to IDEA ↔ DRAFT, IDEA/DRAFT → ARCHIVED and ARCHIVED → DRAFT, and new items start as IDEA or DRAFT. Items are never deleted, only archived.
+- New items start as IDEA or DRAFT. Items are never deleted, only archived.
 - Asset `storage_path` must start with `org/{organization_id}/content/{content_item_id}/`. Files live in a private Supabase Storage bucket (`content-assets`) or a local folder in development (`ASSET_STORAGE`); the app serves them through `/api/content-assets/{id}` after an RLS check.
 - EDITOR+ write content (`content.edit`), everyone in the organization reads it. Changes are logged to `activity_log`.
 
-Not built yet: `content_comments`, `content_reviews`, `strategy_objective_id`, `source_recommendation_id`, `duration_seconds`.
+Implemented in `…_review_approval.sql` (Phase 6):
+
+- `content_reviews` (decision APPROVED / CHANGES_REQUESTED / REJECTED, comment, version) and `content_events` (every stage change with who, version and note). Both are written only by the database and can't be edited or deleted.
+- `content_comments`: one level of replies, `mentions` (members only, at most 20), resolve and reopen by any editor, edit and delete by the author.
+- `notifications`: in-app, one row per recipient, never to the person who caused it. Kinds: `review_requested` (to everyone with `content.approve`), `approved` / `changes_requested` / `rejected` (to the item's owner, creator and submitter), `mentioned`, `commented` (to the item's owner). People see and mark read only their own.
+- `content_versions.submitted_by`, `content_items.published_post_id` (optional link to the post it became).
+- Moves that need a decision go through functions: `submit_content_for_review`, `withdraw_content_from_review`, `review_content`, `set_content_scheduled`, `mark_content_published`; `create_content_version` now also works on approved, scheduled, rejected and changes-requested content. Direct updates can only make the simple moves below.
+
+| From                                        | To                                      | How, who                                                                                               |
+| ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| IDEA ↔ DRAFT                                |                                         | Direct update, EDITOR+                                                                                 |
+| IDEA / DRAFT / CHANGES_REQUESTED            | IN_REVIEW                               | `submit_content_for_review`, EDITOR+. Needs a platform and a caption, brief or file; locks the version |
+| IN_REVIEW                                   | DRAFT                                   | `withdraw_content_from_review`, EDITOR+; unlocks the version                                           |
+| IN_REVIEW                                   | APPROVED / CHANGES_REQUESTED / REJECTED | `review_content`, MANAGER+; a MANAGER can't decide on a version they submitted                         |
+| CHANGES_REQUESTED                           | (new version, stays)                    | `create_content_version`, EDITOR+                                                                      |
+| APPROVED / SCHEDULED / REJECTED             | DRAFT (new version)                     | `create_content_version`, EDITOR+; the approval no longer applies                                      |
+| APPROVED ↔ SCHEDULED                        |                                         | `set_content_scheduled`, EDITOR+; needs a publish date                                                 |
+| APPROVED / SCHEDULED                        | PUBLISHED                               | `mark_content_published`, EDITOR+                                                                      |
+| IDEA / DRAFT / CHANGES_REQUESTED / REJECTED | ARCHIVED                                | Direct update, EDITOR+                                                                                 |
+| APPROVED / SCHEDULED                        | ARCHIVED                                | Direct update, MANAGER+                                                                                |
+| ARCHIVED                                    | DRAFT                                   | Direct update, EDITOR+                                                                                 |
+
+From IN_REVIEW on, the title, platforms, country and taxonomy are locked; the owner and planned date can still change until published. PUBLISHED → ANALYSED is not automated yet.
+
+Not built yet: `strategy_objective_id`, `source_recommendation_id`, `duration_seconds`, multi-step approval (`step`), configurable self-approval.
 
 ```sql
 create type content_status as enum
@@ -601,7 +626,7 @@ create table content_reviews (           -- append-only approval history
 );
 ```
 
-Status transitions are enforced by `lib/approvals/state-machine.ts` and mirrored by a DB trigger so no client can skip states.
+The sketch below is the original design. What was built is described above; stage moves are enforced in the database (guard trigger and functions), so no client can skip a stage.
 
 | From                                 | To                                        | Who                                                             |
 | ------------------------------------ | ----------------------------------------- | --------------------------------------------------------------- |
@@ -730,8 +755,7 @@ create table reports (id uuid pk, organization_id uuid, kind text, period_start 
 create table report_sections (id uuid pk, report_id uuid, organization_id uuid, position int,
   kind text, title text, body jsonb);
 
-create table notifications (id uuid pk, organization_id uuid, user_id uuid, kind text, payload jsonb,
-  read_at timestamptz, created_at timestamptz);
+-- notifications: built in Phase 6 (§6).
 ```
 
 ## 9. Indexing and scale plan

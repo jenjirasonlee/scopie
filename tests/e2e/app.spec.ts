@@ -453,3 +453,77 @@ test('create content with a file and a pillar, and see it on the calendar', asyn
   await page.goto(`/${org.slug}/calendar?view=month&date=${date}`);
   await expect(page.getByRole('link', { name: /Autumn feeding tips reel/ })).toHaveCount(0);
 });
+
+test('submit for review, request changes with a mention, resubmit, approve', async ({
+  browser,
+}) => {
+  const editor = await createUser('e2e-author', 'Ana Author');
+  const manager = await createUser('e2e-reviewer', 'Rob Reviewer');
+  const org = await createOrg(editor, 'Review Org');
+  await addMember(org.id, manager, 'MANAGER');
+  const { data: item, error } = await editor.client
+    .from('content_items')
+    .insert({ organization_id: org.id, title: 'Winter care reel', platform_keys: ['instagram'] })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await editor.client
+    .from('content_versions')
+    .update({ caption: 'Keep roots warm' })
+    .eq('content_item_id', item.id);
+  const itemPath = `/${org.slug}/content/${item.id}`;
+
+  const authorPage = await (await browser.newContext()).newPage();
+  const reviewerPage = await (await browser.newContext()).newPage();
+
+  // The author submits; the version locks.
+  await signIn(authorPage, editor.email);
+  await authorPage.goto(itemPath);
+  await authorPage.locator('#review-note:visible').fill('Check the hashtags');
+  await authorPage.getByRole('button', { name: 'Submit version 1 for review' }).click();
+  await expect(authorPage.getByText(/Submitted for review/).first()).toBeVisible();
+  await expect(authorPage.getByRole('button', { name: 'Withdraw' })).toBeVisible();
+
+  // The reviewer is notified and finds it in the queue.
+  await signIn(reviewerPage, manager.email);
+  await reviewerPage.goto(`/${org.slug}/approvals`);
+  await expect(reviewerPage.getByRole('link', { name: 'Notifications, 1 unread' })).toBeVisible();
+  await reviewerPage.getByRole('link', { name: 'Winter care reel' }).click();
+  await reviewerPage.waitForURL(new RegExp(item.id));
+
+  // Asking for changes needs a comment.
+  await reviewerPage.getByRole('button', { name: 'Request changes' }).click();
+  await expect(reviewerPage.getByText(/Say what needs to change/).first()).toBeVisible();
+  await reviewerPage.locator('#review-comment:visible').fill('Add the product name');
+  await reviewerPage.getByRole('button', { name: 'Request changes' }).click();
+  await expect(reviewerPage.getByText(/Changes requested/).first()).toBeVisible();
+
+  // A comment mentioning the author.
+  await reviewerPage.locator('#comment-body:visible').fill('Happy to look again today');
+  await reviewerPage.locator('summary:visible', { hasText: 'Mention people' }).first().click();
+  await reviewerPage.getByRole('checkbox', { name: 'Ana Author' }).first().check();
+  await reviewerPage.getByRole('button', { name: 'Add comment' }).click();
+  await expect(reviewerPage.getByText('Happy to look again today').first()).toBeVisible();
+
+  // The author sees both in notifications, starts version 2 and resubmits.
+  await authorPage.goto(`/${org.slug}/notifications`);
+  await expect(authorPage.getByText(/asked for changes to/).first()).toBeVisible();
+  await expect(authorPage.getByText(/mentioned you on/).first()).toBeVisible();
+  await authorPage.goto(itemPath);
+  await expect(authorPage.getByText('Add the product name').first()).toBeVisible();
+  await authorPage.getByRole('button', { name: 'Start version 2' }).first().click();
+  await authorPage.waitForURL(/versioned=1/);
+  await authorPage.locator('#caption:visible').fill('Keep roots warm with CANNA');
+  await authorPage.getByRole('button', { name: /^Save/ }).first().click();
+  await expect(authorPage.getByText('Saved.').first()).toBeVisible();
+  await authorPage.getByRole('button', { name: 'Submit version 2 for review' }).click();
+  await expect(authorPage.getByRole('button', { name: 'Withdraw' })).toBeVisible();
+
+  // The reviewer approves; the history keeps both decisions.
+  await reviewerPage.goto(itemPath);
+  await reviewerPage.getByRole('button', { name: 'Approve' }).click();
+  await expect(reviewerPage.getByText('Approved.').first()).toBeVisible();
+  await reviewerPage.reload();
+  await expect(reviewerPage.getByText(/Asked for changes to version 1/).first()).toBeVisible();
+  await expect(reviewerPage.getByText(/Approved version 2/).first()).toBeVisible();
+});
