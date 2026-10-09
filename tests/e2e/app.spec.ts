@@ -110,9 +110,9 @@ test('sign up, create an organization, manage accounts, sign out', async ({ page
   await inactive.getByRole('button', { name: 'Activate' }).click();
   await expect(page.getByRole('row', { name: /CANNA Germany E2E/ })).toContainText('Active');
 
-  // Placeholder modules say so plainly.
+  // Analytics says plainly when there are no stored posts, instead of showing zeros.
   await page.getByRole('link', { name: /Analytics/ }).click();
-  await expect(page.getByText('Coming in a future phase.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No posts in the last 30 days' })).toBeVisible();
 
   // Sign out, then protected pages redirect to sign-in.
   await page.getByRole('button', { name: 'Account menu' }).click();
@@ -299,7 +299,7 @@ test('public profiles: viewer setup explained, bulk add, observed history, remov
   });
 
   await page.goto(`/${org.slug}/accounts/${account!.id}`);
-  await expect(page.getByText(/Observed since 07\/09\/2026/)).toBeVisible();
+  await expect(page.getByText(/Observed since 7 Sept 2026/)).toBeVisible();
   await expect(page.getByText('+4.4% observed growth')).toBeVisible();
 
   // The dashboard shows the same observed growth from stored observations only.
