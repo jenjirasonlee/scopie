@@ -28,6 +28,7 @@ import {
   type SocialAccountListItem,
 } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
+import { formatDateTime } from '@/lib/content/review';
 import { getOrgContext } from '@/lib/orgs/queries';
 
 export const metadata: Metadata = { title: 'Accounts' };
@@ -203,6 +204,7 @@ export default async function AccountsPage({
                   canManage={canManage}
                   platformName={platformName}
                   countryName={countryName}
+                  timeZone={org.default_timezone}
                 />
               ))}
             </TableBody>
@@ -220,6 +222,7 @@ function GroupRows({
   canManage,
   platformName,
   countryName,
+  timeZone,
 }: {
   label: string;
   accounts: SocialAccountListItem[];
@@ -227,6 +230,7 @@ function GroupRows({
   canManage: boolean;
   platformName: Map<string, string>;
   countryName: Map<string, string>;
+  timeZone: string;
 }) {
   return (
     <>
@@ -284,9 +288,10 @@ function GroupRows({
           </TableCell>
           <TableCell className="text-muted-foreground">
             {(account.last_observed_at ?? account.last_successful_sync_at)
-              ? new Date(
+              ? formatDateTime(
                   (account.last_observed_at ?? account.last_successful_sync_at)!,
-                ).toLocaleString('en-GB')
+                  timeZone,
+                )
               : 'Not yet'}
           </TableCell>
           <TableCell>

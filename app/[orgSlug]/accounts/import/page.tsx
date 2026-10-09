@@ -15,6 +15,7 @@ import {
 import { IMPORT_STATUS_LABELS } from '@/lib/accounts/labels';
 import { listAccounts, listPlatforms } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
+import { formatDateTime } from '@/lib/content/review';
 import { importCsv } from '@/lib/imports/actions';
 import { TEMPLATES } from '@/lib/imports/templates';
 import { getOrgContext } from '@/lib/orgs/queries';
@@ -139,7 +140,7 @@ export default async function ImportPage({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {new Date(batch.created_at).toLocaleString('en-GB')}
+                      {formatDateTime(batch.created_at, org.default_timezone)}
                     </TableCell>
                   </TableRow>
                 ))}

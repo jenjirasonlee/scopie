@@ -18,6 +18,7 @@ import {
 } from '@/lib/accounts/labels';
 import { getAccount } from '@/lib/accounts/queries';
 import { can } from '@/lib/auth/permissions';
+import { formatDateTime } from '@/lib/content/review';
 import { getOrgContext } from '@/lib/orgs/queries';
 import { getAccountPipeline, getObservationHistory, listRecentPosts } from '@/lib/pipeline/queries';
 import {
@@ -91,8 +92,12 @@ export default async function AccountPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-6">
-          <ObservationHistoryCard history={history} />
-          <RecentPosts posts={posts} publicOnly={account.access_type !== 'connected'} />
+          <ObservationHistoryCard history={history} timeZone={org.default_timezone} />
+          <RecentPosts
+            posts={posts}
+            publicOnly={account.access_type !== 'connected'}
+            timeZone={org.default_timezone}
+          />
           {canManage ? (
             <AccountForm
               action={updateSocialAccount.bind(null, orgSlug, account.id)}
@@ -147,7 +152,7 @@ export default async function AccountPage({
                 <dt className="text-muted-foreground">Last successful sync</dt>
                 <dd>
                   {account.last_successful_sync_at
-                    ? new Date(account.last_successful_sync_at).toLocaleString('en-GB')
+                    ? formatDateTime(account.last_successful_sync_at, org.default_timezone)
                     : 'Never'}
                 </dd>
               </dl>
@@ -159,6 +164,7 @@ export default async function AccountPage({
             runs={pipeline.runs}
             earliestPostAt={pipeline.earliestPostAt}
             canManage={canManage}
+            timeZone={org.default_timezone}
           />
           {canManage ? (
             <RemoveProfileCard

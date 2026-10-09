@@ -33,6 +33,7 @@ export function weekPeriod(week: ReportWeek, timeZone: string): Period {
   return {
     start: zonedDateTimeToUtc(week.start, '00:00', timeZone),
     end: zonedDateTimeToUtc(addDays(week.end, 1), '00:00', timeZone),
+    timeZone,
   };
 }
 

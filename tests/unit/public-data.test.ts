@@ -38,7 +38,7 @@ describe('coverage line', () => {
     }) as SocialAccount;
 
   it('says when nothing was observed yet', () => {
-    expect(coverageLine(account({}), null)).toMatch(/Not observed yet/);
+    expect(coverageLine(account({}), null, 'Europe/Amsterdam')).toMatch(/Not observed yet/);
   });
 
   it('states both how long it was observed and how far back posts are complete', () => {
@@ -49,12 +49,15 @@ describe('coverage line', () => {
           earliest_post_at: '2025-03-03T10:00:00Z',
         }),
         '2025-03-03T10:00:00Z',
+        'Europe/Amsterdam',
       ),
-    ).toBe('Observed since 07/10/2026; posts complete back to 03/03/2025.');
+    ).toBe('Observed since 7 Oct 2026; posts complete back to 3 Mar 2025.');
   });
 
   it('never presents demo data as observed', () => {
-    expect(coverageLine(account({ access_type: 'demo' }), null)).toMatch(/^DEMO DATA/);
+    expect(coverageLine(account({ access_type: 'demo' }), null, 'Europe/Amsterdam')).toMatch(
+      /^DEMO DATA/,
+    );
   });
 });
 

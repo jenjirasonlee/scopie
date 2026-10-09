@@ -20,6 +20,8 @@ export function ImportForm({
   defaultAccountId?: string;
 }) {
   const [state, formAction] = useActionState(action, { status: 'idle' } as ImportState);
+  // Controlled, so a failed import keeps the choices (React resets uncontrolled fields).
+  const [accountId, setAccountId] = useState(defaultAccountId ?? '');
   const [kind, setKind] = useState<ImportKind>('posts');
   return (
     <form action={formAction} className="space-y-4" encType="multipart/form-data">
@@ -29,7 +31,8 @@ export function ImportForm({
           <NativeSelect
             id="accountId"
             name="accountId"
-            defaultValue={defaultAccountId ?? ''}
+            value={accountId}
+            onChange={(event) => setAccountId(event.target.value)}
             required
           >
             <option value="" disabled>
@@ -67,17 +70,27 @@ export function ImportForm({
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       ) : null}
-      {state.status === 'done' ? <ImportResult summary={state.summary} /> : null}
+      {state.status === 'done' ? <ImportResult summary={state.summary} kind={kind} /> : null}
     </form>
   );
 }
 
+/** Columns that only appear in the other kind of file, to spot a file imported as the wrong kind. */
+const OTHER_KIND_COLUMNS: Record<ImportKind, string[]> = {
+  posts: ['date', 'followers', 'followers_gained', 'followers_lost', 'profile_views'],
+  account_metrics: ['post_id', 'published_at', 'permalink', 'caption'],
+};
+
 function ImportResult({
   summary,
+  kind,
 }: {
   summary: Extract<ImportState, { status: 'done' }>['summary'];
+  kind: ImportKind;
 }) {
   const ok = summary.status !== 'failed';
+  const wrongKind =
+    !ok && summary.ignoredColumns.some((column) => OTHER_KIND_COLUMNS[kind].includes(column));
   return (
     <Alert variant={ok ? 'success' : 'destructive'} aria-live="polite" data-testid="import-result">
       {ok ? <CheckCircle2 aria-hidden /> : <AlertCircle aria-hidden />}
@@ -91,6 +104,13 @@ function ImportResult({
             ? ` ${summary.duplicatesSkipped} values were already stored.`
             : ''}
         </p>
+        {wrongKind ? (
+          <p>
+            This looks like a file of{' '}
+            {kind === 'posts' ? 'account metrics by day' : 'posts and their metrics'}. Choose that
+            under “The file contains” and import it again.
+          </p>
+        ) : null}
         {summary.ignoredColumns.length ? (
           <p>Columns not used: {summary.ignoredColumns.join(', ')}.</p>
         ) : null}

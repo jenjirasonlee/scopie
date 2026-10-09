@@ -47,7 +47,12 @@ export const UNAVAILABLE_LABELS: Record<UnavailableReason, string> = {
 };
 
 /** A half-open time window [start, end). */
-export type Period = { start: Date; end: Date };
+export type Period = {
+  start: Date;
+  end: Date;
+  /** Time zone the period's days are counted in, e.g. a local report week. UTC when absent. */
+  timeZone?: string;
+};
 
 export type FollowerObservation = {
   /** When the value was observed (ISO timestamp). */

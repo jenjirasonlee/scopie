@@ -15,7 +15,7 @@ type Action = (state: FormState, formData: FormData) => Promise<FormState>;
 export function RunAnalysisForm({ action, label }: { action: Action; label: string }) {
   const [state, formAction] = useActionState(action, initialFormState);
   return (
-    <form action={formAction} className="flex max-w-sm flex-col items-end gap-2">
+    <form action={formAction} className="flex max-w-sm flex-col items-start gap-2">
       <SubmitButton size="sm" pendingLabel="Analysing… this can take a minute">
         <Sparkles aria-hidden />
         {label}
