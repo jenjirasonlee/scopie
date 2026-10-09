@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "id": "17900000000000004",
+      "media_type": "VIDEO",
+      "media_product_type": "FEED",
+      "permalink": "https://www.instagram.com/p/FIXTURE004/",
+      "timestamp": "2026-09-28T07:15:00+0000"
+    }
+  ],
+  "paging": {
+    "cursors": {
+      "before": "QVFIUmZAfixturebefore2",
+      "after": "QVFIUmZAfixtureafter2"
+    }
+  }
+}

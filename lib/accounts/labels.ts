@@ -13,7 +13,7 @@ export const CONNECTION_STATUS_LABELS: Record<ConnectionStatus, string> = {
 
 export const CONNECTION_STATUS_HELP: Record<ConnectionStatus, string> = {
   not_connected:
-    'Added manually. No data is synced until a platform connector is connected (Phase 4).',
+    'Added manually. Link it to a platform connection in Settings → Connections to sync data, or import a CSV.',
   connected: 'Connected through the platform API.',
   needs_reauth: 'Authorization expired or was revoked. Reconnect to resume syncing.',
   error: 'The last sync failed.',
@@ -21,9 +21,32 @@ export const CONNECTION_STATUS_HELP: Record<ConnectionStatus, string> = {
 };
 
 export const DATA_SOURCE_LABELS: Record<DataSource, string> = {
-  live_api: 'Live',
-  public_api: 'Public',
+  authenticated: 'Live',
+  public: 'Public',
   manual: 'Manual',
-  import: 'Imported',
+  imported: 'Imported',
   demo: 'DEMO',
+};
+
+export const SYNC_STATUS_LABELS: Record<Enums<'sync_status'>, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  succeeded: 'Succeeded',
+  partial: 'Partly done',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+export const SYNC_JOB_LABELS: Record<Enums<'sync_job_type'>, string> = {
+  account_daily: 'Daily account metrics',
+  posts_incremental: 'New posts',
+  post_metrics_refresh: 'Post metrics refresh',
+  backfill: 'History backfill',
+};
+
+export const IMPORT_STATUS_LABELS: Record<Enums<'import_status'>, string> = {
+  processing: 'Processing',
+  completed: 'Imported',
+  completed_with_errors: 'Imported with skipped rows',
+  failed: 'Failed',
 };

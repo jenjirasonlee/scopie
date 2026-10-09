@@ -5,6 +5,9 @@
  *   pnpm db:seed            # local Supabase only
  *   pnpm db:seed --allow-remote   # explicitly allow a non-local Supabase URL
  *
+ * It also generates DEMO posts and metrics for the demo organization's own accounts,
+ * written through the same ingest step as real data and stored as data_source 'demo'.
+ *
  * Everything created here is fictional. No real CANNA accounts, credentials or data.
  * Accounts get connection_status 'demo' and data_source 'demo', which the UI labels as DEMO.
  * Safe to re-run: existing demo rows are updated, not duplicated.
@@ -12,6 +15,8 @@
 import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import type { Database, TablesInsert } from '../lib/db/types';
+import { generateDemoAccount } from '../lib/demo/generate';
+import { ingest } from '../lib/ingest/ingest';
 
 config({ path: '.env.local', quiet: true });
 config({ quiet: true });
@@ -217,8 +222,56 @@ async function main() {
     if (!existing) created++;
   }
 
+  // DEMO posts and metrics for the organization's own active accounts.
+  const { data: ownAccounts, error: ownError } = await supabase
+    .from('social_accounts')
+    .select('id, platform_key, handle')
+    .eq('organization_id', org.id)
+    .eq('is_competitor', false)
+    .eq('is_active', true);
+  if (ownError) throw ownError;
+  const now = new Date();
+  let posts = 0;
+  let facts = 0;
+  for (const account of ownAccounts) {
+    const demo = generateDemoAccount({
+      seed: account.handle ?? account.id,
+      platformKey: account.platform_key,
+      now,
+    });
+    const base = {
+      organizationId: org.id,
+      socialAccountId: account.id,
+      platformKey: account.platform_key,
+      dataSource: 'demo' as const,
+    };
+    const daily = await ingest(
+      supabase,
+      { ...base, capturedAt: demo.accountCapturedAt, accountMetrics: demo.accountMetrics },
+      'sync',
+    );
+    facts += daily.accountMetricsWritten;
+    const seenPosts = new Set<string>();
+    for (const capture of demo.captures) {
+      const result = await ingest(
+        supabase,
+        {
+          ...base,
+          capturedAt: capture.capturedAt,
+          posts: capture.posts,
+          postMetrics: capture.metrics,
+        },
+        'sync',
+      );
+      capture.posts.forEach((post) => seenPosts.add(post.externalId));
+      facts += result.postMetricsWritten;
+    }
+    posts += seenPosts.size;
+  }
+
   console.log(`Seeded DEMO DATA into "${org.name}" (/${org.slug}/dashboard)`);
   console.log(`  ${accounts.length} demo social accounts (${created} new)`);
+  console.log(`  ${posts} DEMO posts and ${facts} new DEMO metric values`);
   console.log(
     `  Sign in as ${DEMO_USER_EMAIL} (owner), ${DEMO_TEAM.map((m) => `${m.email} (${m.role.toLowerCase()})`).join(', ')}`,
   );

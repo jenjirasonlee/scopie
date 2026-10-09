@@ -37,7 +37,7 @@ describe('social accounts', () => {
         language: 'de',
         // A user trying to fake a live connection:
         connection_status: 'connected',
-        primary_data_source: 'live_api',
+        primary_data_source: 'authenticated',
         last_successful_sync_at: new Date().toISOString(),
       })
       .select()
@@ -64,7 +64,7 @@ describe('social accounts', () => {
       .single();
     const { data } = await admin.client
       .from('social_accounts')
-      .update({ connection_status: 'connected', primary_data_source: 'live_api' })
+      .update({ connection_status: 'connected', primary_data_source: 'authenticated' })
       .eq('id', account!.id)
       .select()
       .single();

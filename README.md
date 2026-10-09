@@ -4,7 +4,7 @@
 
 Scopie is an open-source platform for social media analytics, cross-market benchmarking, content planning, review and approval, and evidence-based AI recommendations. It starts as an internal tool for a marketing team managing ~30 social accounts across countries (CANNA Corporate), and is built multi-tenant so any organization can run it.
 
-> **Status: Phase 1 (foundation).** Sign-in, organizations, roles, organization isolation, the app shell and social account management work. Analytics, platform connectors, content, approvals and AI are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: Phase 2 (real social data pipeline).** Sign-in, organizations, roles, social accounts, the Meta connector (Instagram + Facebook), scheduled sync and CSV import work. Analytics screens, benchmarking, content, approvals and AI are planned and shown as "Coming in a future phase" in the app. See [What works today](#what-works-today) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Why Scopie exists
 
@@ -16,19 +16,23 @@ Marketing teams running many accounts across countries and platforms end up with
 
 ## What works today
 
-| Area                                                                                               | Status                                                                                                 |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Sign up, sign in, sign out (email + password, Supabase Auth)                                       | Working                                                                                                |
-| Protected routes and session refresh                                                               | Working                                                                                                |
-| Basic user profile (name, timezone)                                                                | Working                                                                                                |
-| Organizations (create, settings, switch between them)                                              | Working                                                                                                |
-| Roles OWNER / ADMIN / MANAGER / EDITOR / VIEWER, changing a member's role                          | Working                                                                                                |
-| Organization isolation via Postgres Row Level Security                                             | Working, covered by integration tests                                                                  |
-| Social accounts: list, filter, group by country, add, edit, activate/deactivate, connection status | Working (manual accounts; no platform connection yet)                                                  |
-| Dashboard                                                                                          | Account overview only (counts by country and platform). No performance metrics until connectors exist. |
-| DEMO seed data                                                                                     | Working (`pnpm db:seed`)                                                                               |
-| Inviting members by email                                                                          | Not yet (Phase 2)                                                                                      |
-| Platform connectors, analytics, benchmarks, content, calendar, approvals, strategy, reports, AI    | Not yet. Placeholder pages say "Coming in a future phase."                                             |
+| Area                                                                                               | Status                                                                                      |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Sign up, sign in, sign out (email + password, Supabase Auth)                                       | Working                                                                                     |
+| Protected routes and session refresh                                                               | Working                                                                                     |
+| Basic user profile (name, timezone)                                                                | Working                                                                                     |
+| Organizations (create, settings, switch between them)                                              | Working                                                                                     |
+| Roles OWNER / ADMIN / MANAGER / EDITOR / VIEWER, changing a member's role                          | Working                                                                                     |
+| Organization isolation via Postgres Row Level Security                                             | Working, covered by integration tests                                                       |
+| Social accounts: list, filter, group by country, add, edit, activate/deactivate, connection status | Working                                                                                     |
+| Connect with Meta (Instagram business accounts + Facebook Pages), link, unlink, disconnect         | Working once a Meta app is configured (see [API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md)) |
+| Scheduled sync: daily account metrics, new posts, post metrics at set ages, history backfill       | Working (Trigger.dev task or `pnpm sync:worker`)                                            |
+| CSV import of account metrics or posts (LinkedIn and other platforms without a connector)          | Working                                                                                     |
+| Account page: recent posts with their latest numbers and source badges, sync history, "Sync now"   | Working                                                                                     |
+| Dashboard                                                                                          | Account overview only. Charts arrive with the analytics dashboard (Phase 3).                |
+| DEMO seed data, including DEMO posts and metrics                                                   | Working (`pnpm db:seed`)                                                                    |
+| Inviting members by email                                                                          | Not yet                                                                                     |
+| Analytics, benchmarks, content, calendar, approvals, strategy, reports, AI                         | Not yet. Placeholder pages say "Coming in a future phase."                                  |
 
 ## Architecture
 
@@ -36,17 +40,20 @@ Marketing teams running many accounts across countries and platforms end up with
 - **Supabase**: Postgres with Row Level Security, Auth, and (later) Storage.
 - **Tailwind CSS + shadcn/ui-style components + Lucide icons.**
 - **Zod** for validation, **Vitest** and **Playwright** for tests.
-- Planned: **Trigger.dev** for background sync jobs, **OpenAI** behind a provider interface for AI.
+- **Trigger.dev** runs the sync worker every 15 minutes (or run `pnpm sync:worker --watch` on any server).
+- Planned: **OpenAI** behind a provider interface for AI.
 
 Domain logic lives in `lib/<domain>`; routes in `app/` stay thin. Security is enforced in the database (RLS), and the app adds friendly permission checks on top. Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATABASE.md](docs/DATABASE.md).
 
 ```
 app/                 routes (auth pages, onboarding, /[orgSlug]/…)
 components/          ui primitives, layout, feature components
-lib/                 auth, db, orgs, accounts, members, profile, navigation
+lib/                 auth, db, orgs, accounts, members, profile, navigation,
+                     platforms (adapters), ingest, metrics, sync, imports, connections, crypto, demo
+trigger/             Trigger.dev scheduled sync task
 schemas/             Zod schemas shared by forms and server actions
 supabase/migrations  SQL schema, RLS policies, reference data
-scripts/seed-demo.ts DEMO DATA generator
+scripts/             seed-demo.ts (DEMO DATA), sync-worker.ts (sync without Trigger.dev)
 tests/               unit, integration (real database), e2e (browser)
 docs/                product, architecture, database, integrations, AI, roadmap
 ```
@@ -76,18 +83,24 @@ Useful commands:
 | `pnpm test:e2e`                              | Browser tests (builds must exist: run `pnpm build` first)                |
 | `pnpm db:reset`                              | Recreate the local database from migrations                              |
 | `pnpm db:types`                              | Regenerate `lib/db/types.ts` from the local database                     |
+| `pnpm sync:worker` (`--watch` to repeat)     | Run one sync pass: queue due jobs and run them                           |
+| `pnpm trigger:dev` / `pnpm trigger:deploy`   | Run or deploy the Trigger.dev sync task                                  |
 
 ## Environment variables
 
 See [.env.example](.env.example).
 
-| Variable                        | Where it's used                                                                                    | Secret?    |
-| ------------------------------- | -------------------------------------------------------------------------------------------------- | ---------- |
-| `NEXT_PUBLIC_SUPABASE_URL`      | App (browser and server)                                                                           | No         |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | App. Supabase's anon (or publishable) key; safe in the browser because RLS protects data           | No         |
-| `NEXT_PUBLIC_SITE_URL`          | Links in auth emails                                                                               | No         |
-| `SUPABASE_SERVICE_ROLE_KEY`     | Only `pnpm db:seed` and the integration/e2e tests. **Never used by the web app; never expose it.** | **Yes**    |
-| `DEMO_USER_PASSWORD`            | Password for demo users created by `pnpm db:seed`                                                  | Local only |
+| Variable                                    | Where it's used                                                                                                                                         | Secret?         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`                  | App (browser and server)                                                                                                                                | No              |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`             | App. Supabase's anon (or publishable) key; safe in the browser because RLS protects data                                                                | No              |
+| `NEXT_PUBLIC_SITE_URL`                      | Links in auth emails                                                                                                                                    | No              |
+| `SUPABASE_SERVICE_ROLE_KEY`                 | Server only: the Meta OAuth callback and disconnect (to store/delete encrypted tokens), the sync worker, `pnpm db:seed` and tests. **Never expose it.** | **Yes**         |
+| `SCOPIE_ENCRYPTION_KEY`                     | Encrypts platform tokens at rest. 32 random bytes, base64 (`openssl rand -base64 32`). Losing it means reconnecting every platform.                     | **Yes**         |
+| `META_APP_ID`, `META_APP_SECRET`            | The Meta app used for "Connect with Meta" and the sync worker                                                                                           | Secret: **Yes** |
+| `META_GRAPH_API_VERSION`                    | Optional. Graph API version, defaults to the one pinned in code                                                                                         | No              |
+| `TRIGGER_PROJECT_REF`, `TRIGGER_SECRET_KEY` | Trigger.dev project for the scheduled sync                                                                                                              | Key: **Yes**    |
+| `DEMO_USER_PASSWORD`                        | Password for demo users created by `pnpm db:seed`                                                                                                       | Local only      |
 
 ## Database setup (hosted Supabase)
 
@@ -98,18 +111,22 @@ See [.env.example](.env.example).
 5. Copy the project URL and anon/publishable key into your environment.
 6. Don't run `pnpm db:seed` against production; it refuses non-local URLs unless you pass `--allow-remote`.
 
-## OAuth, platform connectors and AI
+## Platform connectors and data
 
-Not implemented yet. Planned designs, including scopes and limitations per platform, are in [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md) and [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md). The first real connector (Meta: Instagram + Facebook) is Phase 4. The section "Adding a new platform connector" in API_INTEGRATIONS.md describes the contract new connectors will implement.
+The Meta connector (Instagram + Facebook) is built. To use it, create a Meta app and set the variables above; the steps are in [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md). Then go to **Settings → Connections → Connect with Meta**. Without a Meta app, CSV import (**Accounts → Import CSV**) works on its own.
+
+How data flows, how sync is scheduled and what happens on errors: [docs/DATA_PIPELINE.md](docs/DATA_PIPELINE.md). Metric definitions: [docs/METRICS.md](docs/METRICS.md). AI design: [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md).
+
+Tokens are encrypted on the server and never reach the browser or the logs. Scopie only reads data; it never posts.
 
 ## Deployment
 
-Any Node.js host that runs Next.js works (for example Vercel). Set the three `NEXT_PUBLIC_*` variables, point Supabase Auth's Site URL at the deployment, and run migrations with `supabase db push`. The service-role key is not needed by the deployed app.
+Any Node.js host that runs Next.js works (for example Vercel). Set the three `NEXT_PUBLIC_*` variables, point Supabase Auth's Site URL at the deployment, and run migrations with `supabase db push`. For platform connections also set `SUPABASE_SERVICE_ROLE_KEY`, `SCOPIE_ENCRYPTION_KEY` and the Meta variables (server-side only), and deploy the sync task with `pnpm trigger:deploy` (with the same variables set in Trigger.dev), or run `pnpm sync:worker --watch` on a server.
 
 ## Testing
 
-- **Unit** (`tests/unit`): validation, permissions, slugs, grouping, navigation.
-- **Integration** (`tests/integration`): runs against a real Supabase stack, no mocks. Covers sign-up/sign-in/sign-out, organization isolation, the role permission matrix, last-owner protection, and social account rules (users can't mark accounts as connected, duplicates, owners must be members, audit log).
+- **Unit** (`tests/unit`): validation, permissions, slugs, grouping, navigation, CSV parsing, metric dictionary, token encryption, sync schedule, DEMO generator, and the Meta adapters against saved API responses (pagination, rate limits, expired tokens, missing permissions, secret redaction).
+- **Integration** (`tests/integration`): runs against a real Supabase stack, no mocks. Covers sign-up/sign-in/sign-out, organization isolation, the role permission matrix, last-owner protection, social account rules, and the data pipeline: where data may come from (no DEMO data in real organizations, no live data from users), tokens unreadable by users, linking and disconnecting, CSV import, duplicate protection, the sync engine end to end with a fake platform, and the metric dictionary matching the database.
 - **End-to-end** (`tests/e2e`): sign-up → organization → add/edit/deactivate account → sign-out; viewer read-only; non-members get "not found".
 
 ## Contributing

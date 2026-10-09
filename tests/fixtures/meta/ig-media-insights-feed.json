@@ -1,0 +1,60 @@
+{
+  "data": [
+    {
+      "name": "reach",
+      "period": "lifetime",
+      "values": [{ "value": 1520 }],
+      "title": "Accounts reached",
+      "description": "The number of unique accounts that have seen this post at least once.",
+      "id": "17900000000000001/insights/reach/lifetime"
+    },
+    {
+      "name": "views",
+      "period": "lifetime",
+      "values": [{ "value": 2310 }],
+      "title": "Views",
+      "description": "The number of times the post was played or displayed.",
+      "id": "17900000000000001/insights/views/lifetime"
+    },
+    {
+      "name": "likes",
+      "period": "lifetime",
+      "values": [{ "value": 140 }],
+      "title": "Likes",
+      "description": "The number of likes on the post.",
+      "id": "17900000000000001/insights/likes/lifetime"
+    },
+    {
+      "name": "comments",
+      "period": "lifetime",
+      "values": [{ "value": 0 }],
+      "title": "Comments",
+      "description": "The number of comments on the post.",
+      "id": "17900000000000001/insights/comments/lifetime"
+    },
+    {
+      "name": "shares",
+      "period": "lifetime",
+      "values": [{ "value": 9 }],
+      "title": "Shares",
+      "description": "The number of shares of the post.",
+      "id": "17900000000000001/insights/shares/lifetime"
+    },
+    {
+      "name": "saved",
+      "period": "lifetime",
+      "values": [{ "value": 21 }],
+      "title": "Saved",
+      "description": "The number of saves of the post.",
+      "id": "17900000000000001/insights/saved/lifetime"
+    },
+    {
+      "name": "total_interactions",
+      "period": "lifetime",
+      "values": [{ "value": 170 }],
+      "title": "Interactions",
+      "description": "The number of likes, saves, comments and shares on the post, minus unlikes, unsaves and deleted comments.",
+      "id": "17900000000000001/insights/total_interactions/lifetime"
+    }
+  ]
+}

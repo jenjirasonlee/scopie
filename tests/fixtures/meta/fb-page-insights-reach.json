@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "name": "page_impressions_unique",
+      "period": "day",
+      "values": [
+        { "value": 640, "end_time": "2026-10-02T07:00:00+0000" },
+        { "value": 0, "end_time": "2026-10-04T07:00:00+0000" }
+      ],
+      "title": "Daily Total Reach",
+      "description": "Daily: The number of people who had any content from your Page or about your Page enter their screen.",
+      "id": "100000000000001/insights/page_impressions_unique/day"
+    }
+  ],
+  "paging": {
+    "previous": "https://graph.facebook.com/fixture-previous",
+    "next": "https://graph.facebook.com/fixture-next"
+  }
+}
