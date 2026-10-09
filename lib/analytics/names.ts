@@ -7,6 +7,9 @@ export const PLATFORM_NAMES: Record<string, string> = {
   tiktok: 'TikTok',
   linkedin: 'LinkedIn',
   x: 'X',
+  bluesky: 'Bluesky',
+  threads: 'Threads',
+  pinterest: 'Pinterest',
   reddit: 'Reddit',
   discord: 'Discord',
 };

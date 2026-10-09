@@ -1,0 +1,31 @@
+{
+  "feed": [
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2grow4example7bsk/app.bsky.feed.post/3lfix0000000",
+        "cid": "bafyreifixture00",
+        "author": {
+          "did": "did:plc:fixture2grow4example7bsk",
+          "handle": "examplegrow.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Hello Bluesky.",
+          "createdAt": "2026-09-01T10:00:00.000Z"
+        },
+        "embed": {
+          "$type": "app.bsky.embed.record#view",
+          "record": {
+            "$type": "app.bsky.embed.record#viewRecord",
+            "uri": "at://did:plc:x/app.bsky.feed.post/z"
+          }
+        },
+        "replyCount": 0,
+        "repostCount": 0,
+        "likeCount": 5,
+        "quoteCount": 0,
+        "indexedAt": "2026-09-01T10:00:01.000Z"
+      }
+    }
+  ]
+}

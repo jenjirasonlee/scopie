@@ -241,9 +241,13 @@ describe('X-App-Usage', () => {
 });
 
 describe('public collector registry', () => {
-  it('has Instagram and YouTube, until other official public APIs are built', () => {
+  it('has Instagram, YouTube, X and Bluesky, until other official public APIs are built', () => {
     expect(hasPublicCollector('instagram')).toBe(true);
     expect(hasPublicCollector('youtube')).toBe(true);
+    expect(hasPublicCollector('x')).toBe(true);
+    expect(hasPublicCollector('bluesky')).toBe(true);
+    expect(hasPublicCollector('threads')).toBe(false);
+    expect(hasPublicCollector('pinterest')).toBe(false);
     expect(hasPublicCollector('linkedin')).toBe(false);
     expect(createPublicCollector('tiktok')).toBeNull();
     expect(createPublicCollector('instagram')).toBeInstanceOf(InstagramPublicCollector);

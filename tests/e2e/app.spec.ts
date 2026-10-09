@@ -332,6 +332,14 @@ test('YouTube channels without OAuth, ranked in benchmarks only on what was obse
   // YouTube needs only a server API key; CI has none, so settings says so.
   await page.goto(`/${org.slug}/settings/public-data`);
   await expect(page.getByText('API key missing')).toBeVisible();
+  // Every platform says plainly whether its public data can be read, and why not.
+  await expect(page.getByText('Key not set')).toBeVisible();
+  await expect(
+    page.getByText('TikTok has no official way to read other accounts’ public numbers.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('CSV import works for every platform, including those without public data.'),
+  ).toBeVisible();
 
   await page.goto(`/${org.slug}/accounts/new`);
   await page.locator('#bulk-platform:visible').selectOption('youtube');

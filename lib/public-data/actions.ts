@@ -10,7 +10,7 @@ import { formDataToObject, type FormState } from '@/lib/forms';
 import { getOrgContext } from '@/lib/orgs/queries';
 import { PlatformError, RateLimitError } from '@/lib/platforms/errors';
 import { createPublicCollector, needsViewer } from '@/lib/platforms/registry';
-import { metaConfig, serverEnv } from '@/lib/server-env';
+import { metaConfig, publicApiCredential, serverEnv } from '@/lib/server-env';
 import { loadPublicContext } from '@/lib/sync/credentials';
 import {
   BUSINESS_ROLE_VALUES,
@@ -19,6 +19,7 @@ import {
   parseHandleList,
   publicPlatform,
   type LookupState,
+  type PublicProfilePlatform,
 } from './shared';
 
 const NO_PERMISSION = 'Only owners and admins can manage tracked profiles.';
@@ -62,8 +63,8 @@ export async function clearPublicDataViewer(orgSlug: string): Promise<void> {
 }
 
 /**
- * Looks up a public Instagram profile through the viewer account and returns what Scopie
- * can track for it. Counted against a per-organization hourly allowance, so previews can't
+ * Looks up a public profile (Instagram through the viewer account; YouTube, X and Bluesky
+ * with the server's key or none) and returns what Scopie can track for it. Counted against a per-organization hourly allowance, so previews can't
  * use up the API limit that syncs rely on. The viewer token never leaves the server.
  */
 export async function lookupPublicProfile(
@@ -85,19 +86,12 @@ export async function lookupPublicProfile(
   if (!rules.isValid(handle)) return { status: 'error', message: rules.invalidMessage };
   const env = serverEnv();
   const meta = metaConfig(env);
-  const ready =
-    platform === 'youtube'
-      ? Boolean(env.YOUTUBE_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY)
-      : Boolean(meta && env.SCOPIE_ENCRYPTION_KEY && env.SUPABASE_SERVICE_ROLE_KEY);
+  const credential = needsViewer(platform) ? null : publicApiCredential(env, platform);
+  const ready = needsViewer(platform)
+    ? Boolean(meta && env.SCOPIE_ENCRYPTION_KEY && env.SUPABASE_SERVICE_ROLE_KEY)
+    : credential !== null && Boolean(env.SUPABASE_SERVICE_ROLE_KEY);
   if (!ready) {
-    return {
-      status: 'error',
-      handle,
-      message:
-        platform === 'youtube'
-          ? 'Reading YouTube channels isn’t set up on this server yet (YouTube API key missing).'
-          : 'Reading public profiles isn’t set up on this server yet (Meta app missing).',
-    };
+    return { status: 'error', handle, message: NOT_SET_UP[platform] };
   }
 
   const admin = createAdminClient();
@@ -118,7 +112,7 @@ export async function lookupPublicProfile(
   try {
     const ctx = needsViewer(platform)
       ? await loadPublicContext(admin, org.id, platform, env.SCOPIE_ENCRYPTION_KEY!)
-      : { viewerId: null, credential: env.YOUTUBE_API_KEY! };
+      : { viewerId: null, credential: credential ?? '' };
     await admin.from('public_profile_lookups').insert({
       organization_id: org.id,
       requested_by: user.id,
@@ -146,27 +140,39 @@ export async function lookupPublicProfile(
       },
     };
   } catch (error) {
-    if (error instanceof RateLimitError) {
-      return {
-        status: 'error',
-        handle,
-        message: 'Meta asked Scopie to slow down. Try the preview again later.',
-      };
-    }
     if (error instanceof PlatformError) {
-      const message =
-        error.code === 'no_viewer'
-          ? 'Choose a viewer account in Settings → Public data first.'
-          : error.code === 'profile_not_found'
-            ? error.message
-            : error.code === 'auth'
-              ? 'The viewer account needs to be reconnected in Settings → Connections.'
-              : 'Instagram did not return this profile. Please try again.';
-      return { status: 'error', handle, message };
+      return { status: 'error', handle, message: lookupErrorMessage(platform, error) };
     }
     throw error;
   }
 }
+
+/** What a preview failure means, in plain words. Never includes a token. */
+function lookupErrorMessage(platform: PublicProfilePlatform, error: PlatformError): string {
+  const name = PUBLIC_PROFILE_PLATFORMS[platform].label;
+  if (error.code === 'credits_depleted' || error.code === 'profile_not_found') return error.message;
+  if (error.code === 'profile_protected') return error.message;
+  if (error instanceof RateLimitError) {
+    return platform === 'instagram'
+      ? 'Meta asked Scopie to slow down. Try the preview again later.'
+      : `${name} asked Scopie to slow down. Try the preview again later.`;
+  }
+  if (error.code === 'no_viewer') return 'Choose a viewer account in Settings → Public data first.';
+  if (error.code === 'auth') {
+    return needsViewer(platform)
+      ? 'The viewer account needs to be reconnected in Settings → Connections.'
+      : `The ${name} API key on the server was rejected. Ask whoever runs Scopie to check it.`;
+  }
+  return `${name} did not return this profile. Please try again.`;
+}
+
+/** Shown when a platform's public API isn't set up on this server. */
+const NOT_SET_UP: Record<PublicProfilePlatform, string> = {
+  instagram: 'Reading public profiles isn’t set up on this server yet (Meta app missing).',
+  youtube: 'Reading YouTube channels isn’t set up on this server yet (YouTube API key missing).',
+  x: 'Reading X profiles isn’t set up on this server yet: X needs an API key on the server.',
+  bluesky: 'Reading Bluesky profiles isn’t set up on this server yet.',
+};
 
 const addSchema = z.object({
   handle: z.string().min(1).max(120),
@@ -180,7 +186,7 @@ const addSchema = z.object({
     .pipe(z.string().length(2).nullable()),
 });
 
-/** Saves a public Instagram profile or YouTube channel. The first observation is made by the next sync. */
+/** Saves a public profile (Instagram, YouTube, X, Bluesky). The first observation is made by the next sync. */
 export async function addPublicProfile(
   orgSlug: string,
   _prev: LookupState,
@@ -240,8 +246,8 @@ export type BulkResult = FormState & {
 };
 
 /**
- * Adds many public Instagram profiles from a list of usernames. No preview calls are made:
- * each profile is checked by its first sync, which reports profiles Instagram can't read.
+ * Adds many public profiles of one platform from a list of usernames. No preview calls are made:
+ * each profile is checked by its first sync, which reports profiles the platform can't read.
  */
 export async function addPublicProfilesInBulk(
   orgSlug: string,

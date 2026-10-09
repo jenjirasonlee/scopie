@@ -7,6 +7,9 @@ const MARKS: Record<string, { short: string; className: string }> = {
   youtube: { short: 'YT', className: 'bg-[#fbe4e4] text-[#a11b1b]' },
   tiktok: { short: 'TT', className: 'bg-[#e6f6f5] text-[#0f5f5b]' },
   x: { short: 'X', className: 'bg-[#ececec] text-[#222]' },
+  bluesky: { short: 'BS', className: 'bg-[#e2effc] text-[#0a4f94]' },
+  threads: { short: 'TH', className: 'bg-[#efefef] text-[#333]' },
+  pinterest: { short: 'PI', className: 'bg-[#fbe3e6] text-[#9b1027]' },
   reddit: { short: 'RD', className: 'bg-[#fdeadf] text-[#a13d0b]' },
   discord: { short: 'DC', className: 'bg-[#e9e9fb] text-[#3b3fa5]' },
 };

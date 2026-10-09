@@ -1,7 +1,14 @@
 import type { Db } from '@/lib/ingest/ingest';
-import { hasConnector, hasPublicCollector, needsViewer } from '@/lib/platforms/registry';
+import {
+  KEYLESS_PUBLIC_PLATFORMS,
+  hasConnector,
+  hasPublicCollector,
+  isBilledPublic,
+  needsViewer,
+} from '@/lib/platforms/registry';
 import { runSyncJob, type EngineDeps, type RunOutcome } from './engine';
 import {
+  BILLED_PUBLIC_JOBS,
   CONNECTED_JOBS,
   JOB_INTERVAL_MINUTES,
   PUBLIC_JOBS,
@@ -35,8 +42,11 @@ export async function enqueueDueJobs(
     .from('public_data_viewers')
     .select('organization_id, platform_key');
   if (viewerError) throw new Error(`Could not list viewer accounts: ${viewerError.message}`);
-  // Viewer platforms (Instagram) need an org's viewer; key platforms (YouTube) a server key.
-  const keyPlatforms = (options.apiKeyPlatforms ?? []).filter((key) => !needsViewer(key));
+  // Viewer platforms (Instagram) need an org's viewer; key platforms (YouTube, X) a server
+  // key; keyless platforms (Bluesky) nothing.
+  const keyPlatforms = [
+    ...new Set([...(options.apiKeyPlatforms ?? []), ...KEYLESS_PUBLIC_PLATFORMS]),
+  ].filter((key) => !needsViewer(key));
   let publicProfiles: DueAccount[] = [];
   if (viewers.length || keyPlatforms.length) {
     const { data, error: publicError } = await db
@@ -61,7 +71,11 @@ export async function enqueueDueJobs(
     ...connected
       .filter((account) => hasConnector(account.platform_key))
       .map((account) => ({ account, jobs: CONNECTED_JOBS })),
-    ...publicProfiles.map((account) => ({ account, jobs: PUBLIC_JOBS })),
+    // Platforms billed per read (X) get only the daily observation, to keep the cost down.
+    ...publicProfiles.map((account) => ({
+      account,
+      jobs: isBilledPublic(account.platform_key) ? BILLED_PUBLIC_JOBS : PUBLIC_JOBS,
+    })),
   ];
   if (!candidates.length) return 0;
 

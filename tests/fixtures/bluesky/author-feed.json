@@ -1,0 +1,146 @@
+{
+  "cursor": "2026-10-02T07:30:00.000Z",
+  "feed": [
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2grow4example7bsk/app.bsky.feed.post/3lfix0000004",
+        "cid": "bafyreifixture04",
+        "author": {
+          "did": "did:plc:fixture2grow4example7bsk",
+          "handle": "examplegrow.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Autumn feeding guide is out. #growtips",
+          "createdAt": "2026-10-06T09:15:00.000Z",
+          "langs": ["en"]
+        },
+        "embed": {
+          "$type": "app.bsky.embed.images#view",
+          "images": [
+            {
+              "thumb": "https://cdn.bsky.app/img/feed_thumbnail/plain/fixture@jpeg",
+              "fullsize": "https://cdn.bsky.app/img/feed_fullsize/plain/fixture@jpeg",
+              "alt": ""
+            }
+          ]
+        },
+        "replyCount": 4,
+        "repostCount": 12,
+        "likeCount": 88,
+        "quoteCount": 2,
+        "indexedAt": "2026-10-06T09:15:01.000Z",
+        "labels": []
+      }
+    },
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2other5example3bs/app.bsky.feed.post/3lfix0000099",
+        "cid": "bafyreifixture99",
+        "author": {
+          "did": "did:plc:fixture2other5example3bs",
+          "handle": "someoneelse.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Not ours.",
+          "createdAt": "2026-10-05T12:00:00.000Z"
+        },
+        "replyCount": 0,
+        "repostCount": 3,
+        "likeCount": 10,
+        "quoteCount": 0,
+        "indexedAt": "2026-10-05T12:00:01.000Z"
+      },
+      "reason": {
+        "$type": "app.bsky.feed.defs#reasonRepost",
+        "by": { "did": "did:plc:fixture2grow4example7bsk", "handle": "examplegrow.bsky.social" },
+        "indexedAt": "2026-10-05T13:00:00.000Z"
+      }
+    },
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2grow4example7bsk/app.bsky.feed.post/3lfix0000003",
+        "cid": "bafyreifixture03",
+        "author": {
+          "did": "did:plc:fixture2grow4example7bsk",
+          "handle": "examplegrow.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "How we mix coco, in 60 seconds.",
+          "createdAt": "2026-10-04T16:00:00.000Z"
+        },
+        "embed": {
+          "$type": "app.bsky.embed.video#view",
+          "cid": "bafkreifixturevideo",
+          "playlist": "https://video.bsky.app/watch/fixture/playlist.m3u8",
+          "thumbnail": "https://video.bsky.app/watch/fixture/thumbnail.jpg"
+        },
+        "replyCount": 0,
+        "repostCount": 30,
+        "likeCount": 240,
+        "indexedAt": "2026-10-04T16:00:02.000Z"
+      }
+    },
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2grow4example7bsk/app.bsky.feed.post/3lfix0000002",
+        "cid": "bafyreifixture02",
+        "author": {
+          "did": "did:plc:fixture2grow4example7bsk",
+          "handle": "examplegrow.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "Our care guide",
+          "createdAt": "2026-10-03T08:00:00.000Z"
+        },
+        "embed": {
+          "$type": "app.bsky.embed.external#view",
+          "external": {
+            "uri": "https://example.com/care",
+            "title": "Care guide",
+            "description": ""
+          }
+        },
+        "replyCount": 1,
+        "repostCount": 0,
+        "likeCount": 7,
+        "quoteCount": 0,
+        "indexedAt": "2026-10-03T08:00:01.000Z"
+      }
+    },
+    {
+      "post": {
+        "uri": "at://did:plc:fixture2grow4example7bsk/app.bsky.feed.post/3lfix0000001",
+        "cid": "bafyreifixture01",
+        "author": {
+          "did": "did:plc:fixture2grow4example7bsk",
+          "handle": "examplegrow.bsky.social"
+        },
+        "record": {
+          "$type": "app.bsky.feed.post",
+          "text": "This, with our photos:",
+          "createdAt": "2026-10-02T07:30:00.000Z"
+        },
+        "embed": {
+          "$type": "app.bsky.embed.recordWithMedia#view",
+          "record": {
+            "record": {
+              "$type": "app.bsky.embed.record#viewNotFound",
+              "uri": "at://did:plc:x/app.bsky.feed.post/y",
+              "notFound": true
+            }
+          },
+          "media": { "$type": "app.bsky.embed.images#view", "images": [] }
+        },
+        "replyCount": 3,
+        "repostCount": 1,
+        "likeCount": 19,
+        "quoteCount": 0,
+        "indexedAt": "2026-10-02T07:30:01.000Z"
+      }
+    }
+  ]
+}

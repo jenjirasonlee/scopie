@@ -9,6 +9,7 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { BUSINESS_ROLE_LABELS, BUSINESS_ROLES } from '@/lib/accounts/labels';
 import type { BulkResult } from '@/lib/public-data/actions';
+import { PUBLIC_PLATFORM_OPTIONS } from './add-public-profile';
 
 export function BulkAddProfiles({
   action,
@@ -33,8 +34,11 @@ export function BulkAddProfiles({
         <div className="space-y-4">
           <FormField id="bulk-platform" label="Platform">
             <NativeSelect name="platform" defaultValue="instagram">
-              <option value="instagram">Instagram</option>
-              <option value="youtube">YouTube</option>
+              {PUBLIC_PLATFORM_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </NativeSelect>
           </FormField>
           <FormField id="bulk-role" label="Why you track them">

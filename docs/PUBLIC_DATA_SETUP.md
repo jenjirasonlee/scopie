@@ -1,10 +1,10 @@
 # Scopie — Setting up public data
 
-> A step-by-step guide for marketers, no coding needed. Last updated: 2026-10-07
+> A step-by-step guide for marketers, no coding needed. Last updated: 2026-10-09
 
-This guide sets Scopie up to follow public Instagram profiles and YouTube channels, such as
-competitors, industry accounts and creators. YouTube is much simpler: see [YouTube](#youtube) at the
-end. The profiles you track don't approve anything and never know you follow them in
+This guide sets Scopie up to follow public Instagram profiles, YouTube channels, X accounts and
+Bluesky accounts, such as competitors, industry accounts and creators. YouTube, X and Bluesky are
+much simpler: see [YouTube](#youtube), [X key](#x-key) and [Bluesky](#bluesky) at the end. The profiles you track don't approve anything and never know you follow them in
 Scopie.
 
 You do this once. After that, adding a competitor takes a username and one click.
@@ -165,6 +165,9 @@ Meta's own pages:
 | A profile's sync says the username belongs to a different account  | The username was taken over by someone else. Check the username; Scopie stored nothing for it.                       |
 | "Reading YouTube channels isn’t set up on this server yet"         | The server has no YouTube API key yet. See [YouTube](#youtube).                                                      |
 | "YouTube has no public channel …"                                  | Check the handle, or paste the channel link instead.                                                                 |
+| "X needs an API key on the server"                                 | The server has no X key yet. See [X key](#x-key).                                                                    |
+| "X credits are used up"                                            | Buy more credits in the X developer portal. X profiles are read again within a day.                                  |
+| "… is a protected X account"                                       | Only approved followers can see it, so Scopie doesn't read it.                                                       |
 
 ## YouTube
 
@@ -210,6 +213,40 @@ pick YouTube as the platform.
 
 Google gives each project 10,000 units a day, and each read costs 1 unit. 30 channels use well under
 a tenth of that. If the limit is reached, Scopie waits and tries again later.
+
+## X key
+
+X needs no Meta app and no viewer account, but it does need one API key on the server, and X
+charges for every profile and post Scopie reads.
+
+1. Go to [developer.x.com](https://developer.x.com/) and sign in with an X account the company
+   controls. Open the **Developer Portal**.
+2. Create a **project** and an **app** inside it (for example "Scopie").
+3. In the app, open **Keys and tokens** and generate the **Bearer token**. Copy it once; X won't
+   show it again.
+4. Under **Billing**, buy **pay-per-use credits**. Without credits, X refuses every read.
+5. Give the token to whoever runs the Scopie server. They put it in `X_BEARER_TOKEN` on the server
+   and, if the sync runs on Trigger.dev, in the Trigger.dev environment variables too. Never put it
+   in the app's public settings, and don't paste it in chat or email.
+
+**Settings → Public data** then shows X as **Ready**. Add accounts on **Accounts → Add profile**:
+choose **X** and type `@brandname` or paste an `x.com` link.
+
+What it costs: X charges about $0.01 for each profile read and $0.005 for each post read (check X's
+current prices). Scopie reads each X profile once a day, only new posts and recent posts until they
+are a week old, and at most 50 posts per profile a day. Twenty competitors posting twice a day cost
+roughly $1.20 a day. Post history starts on the day you add a profile (up to 30 days back).
+
+- Protected accounts can't be read.
+- Posts deleted on X are deleted in Scopie too, as X's terms require.
+- Likes, replies, reposts, quotes, bookmarks and views are all public on X, so Scopie shows them.
+
+## Bluesky
+
+Bluesky needs nothing: no key, no app and no login. Choose **Bluesky** on **Accounts → Add profile**
+and type the handle (`brand.bsky.social` or a custom domain such as `brand.com`) or paste a
+`bsky.app` profile link. Bluesky doesn't count views, so Scopie shows none. Accounts that ask apps
+not to show them to logged-out people are not read.
 
 Before using Scopie for competitor monitoring at CANNA, a short legal or privacy check is
 recommended.

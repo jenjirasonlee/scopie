@@ -1,0 +1,17 @@
+{
+  "did": "did:plc:fixture2hidden5exampl3bs",
+  "handle": "quietgrower.bsky.social",
+  "displayName": "Quiet Grower (fixture)",
+  "labels": [
+    {
+      "src": "did:plc:fixture2hidden5exampl3bs",
+      "uri": "at://did:plc:fixture2hidden5exampl3bs/app.bsky.actor.profile/self",
+      "cid": "bafyreifixture",
+      "val": "!no-unauthenticated",
+      "cts": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "followersCount": 40,
+  "followsCount": 12,
+  "postsCount": 30
+}

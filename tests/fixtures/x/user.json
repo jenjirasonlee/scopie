@@ -1,0 +1,34 @@
+{
+  "data": {
+    "id": "1500000000000000001",
+    "username": "ExampleGrow",
+    "name": "Example Grow (fixture)",
+    "description": "Fixture account for tests. Not a real account. #hydroponics",
+    "profile_image_url": "https://pbs.twimg.example/profile_images/fixture_normal.jpg",
+    "url": "https://t.co/fixture01",
+    "verified": false,
+    "protected": false,
+    "created_at": "2015-03-02T10:00:00.000Z",
+    "entities": {
+      "url": {
+        "urls": [
+          {
+            "start": 0,
+            "end": 23,
+            "url": "https://t.co/fixture01",
+            "expanded_url": "https://example.com/grow",
+            "display_url": "example.com/grow"
+          }
+        ]
+      }
+    },
+    "public_metrics": {
+      "followers_count": 18450,
+      "following_count": 312,
+      "tweet_count": 5120,
+      "listed_count": 77,
+      "like_count": 2034,
+      "media_count": 640
+    }
+  }
+}

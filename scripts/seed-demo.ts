@@ -62,6 +62,7 @@ const PLATFORMS_BY_MARKET: Record<string, { platform: string; type: string }[]> 
     { platform: 'facebook', type: 'page' },
     { platform: 'linkedin', type: 'company_page' },
     { platform: 'youtube', type: 'channel' },
+    { platform: 'bluesky', type: 'profile' },
   ],
   DE: [
     { platform: 'instagram', type: 'business' },
@@ -145,7 +146,39 @@ const COMPETITORS: {
     country: 'US',
     role: 'influencer',
   },
+  {
+    name: 'Hydro Rival (DEMO)',
+    handle: 'hydrorival_demo',
+    platform: 'x',
+    country: 'NL',
+    role: 'competitor',
+  },
+  {
+    name: 'Hydro Rival (DEMO)',
+    handle: 'hydrorival-demo.bsky.social',
+    platform: 'bluesky',
+    country: 'NL',
+    role: 'competitor',
+  },
 ];
+
+/** Account type of a public demo profile. */
+const PUBLIC_ACCOUNT_TYPE: Record<string, string> = {
+  youtube: 'channel',
+  x: 'profile',
+  bluesky: 'profile',
+};
+
+/**
+ * Platforms Scopie reads only through public data (no owner connection), so even own DEMO
+ * profiles there get public-style DEMO DATA: never reach, saves or other private metrics.
+ */
+const PUBLIC_ONLY_PLATFORMS = new Set(['x', 'bluesky']);
+
+/** Bluesky handles are domain names, so they can't contain underscores. */
+function demoHandle(platform: string, market: string): string {
+  return platform === 'bluesky' ? `canna-${market}-demo.bsky.social` : `canna_${market}_demo`;
+}
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -220,7 +253,7 @@ async function main() {
         organization_id: org.id,
         platform_key: entry.platform,
         display_name: `CANNA ${market.name} (DEMO)`,
-        handle: `canna_${market.handle}_demo`,
+        handle: demoHandle(entry.platform, market.handle),
         account_type: entry.type,
         country_code: market.country,
         language: market.language,
@@ -238,7 +271,7 @@ async function main() {
       platform_key: competitor.platform,
       display_name: competitor.name,
       handle: competitor.handle,
-      account_type: competitor.platform === 'youtube' ? 'channel' : 'business',
+      account_type: PUBLIC_ACCOUNT_TYPE[competitor.platform] ?? 'business',
       country_code: competitor.country,
       business_role: competitor.role,
       connection_status: 'demo',
@@ -287,7 +320,8 @@ async function main() {
   let facts = 0;
   for (const account of ownAccounts) {
     // Competitors, industry accounts and creators are public profiles: public metrics only.
-    const isPublic = account.business_role !== 'owned';
+    const isPublic =
+      account.business_role !== 'owned' || PUBLIC_ONLY_PLATFORMS.has(account.platform_key);
     const demo = generateDemoAccount({
       // Each market uses one handle on several platforms; the platform keeps their numbers apart.
       seed: `${account.handle ?? account.id}:${account.platform_key}`,
@@ -295,6 +329,38 @@ async function main() {
       now,
       mode: isPublic ? 'public' : 'connected',
     });
+    if (isPublic) {
+      // Older seeds made owner-style DEMO DATA for own X profiles. A public profile never
+      // holds private metrics, so any left over are removed.
+      // Public observations are lifetime values read at 06:00; anything else is owner-style.
+      const { data: rows } = await supabase
+        .from('account_metric_snapshots')
+        .select('id, period, captured_at')
+        .eq('social_account_id', account.id);
+      const ownerStyle = (rows ?? [])
+        .filter((row) => row.period === 'day' || !row.captured_at.includes('T06:00:00'))
+        .map((row) => row.id);
+      for (let index = 0; index < ownerStyle.length; index += 200) {
+        await supabase
+          .from('account_metric_snapshots')
+          .delete()
+          .in('id', ownerStyle.slice(index, index + 200));
+      }
+      const { data: stale } = await supabase
+        .from('posts')
+        .select('id')
+        .eq('social_account_id', account.id);
+      for (let index = 0; index < (stale?.length ?? 0); index += 200) {
+        await supabase
+          .from('post_metric_snapshots')
+          .delete()
+          .in(
+            'post_id',
+            stale!.slice(index, index + 200).map((post) => post.id),
+          )
+          .in('metric_key', ['reach', 'interactions', 'watch_time', 'avg_watch_duration']);
+      }
+    }
     const base = {
       organizationId: org.id,
       socialAccountId: account.id,

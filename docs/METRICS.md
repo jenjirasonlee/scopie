@@ -32,6 +32,7 @@ The metric dictionary is `METRIC_DEFINITIONS` in `lib/metrics/registry.ts`, mirr
 | `profile_views`                                                    | Profile views          | count   | sum                | accounts        |
 | `interactions`                                                     | Interactions           | count   | sum                | accounts, posts |
 | `likes`, `reactions`, `comments`, `shares`, `saves`, `link_clicks` | —                      | count   | sum                | posts           |
+| `quotes`                                                           | Quotes                 | count   | sum                | posts           |
 | `watch_time`                                                       | Watch time             | seconds | sum                | posts           |
 | `avg_watch_duration`                                               | Average watch duration | seconds | recompute          | posts           |
 | `completion_rate`                                                  | Completion rate        | percent | recompute          | posts           |
@@ -70,6 +71,12 @@ mirrored in `platform_metric_map`):
 - YouTube channel views are `yt_channel_views` (lifetime) and video views are `yt_public_views`.
   Neither is compared with Instagram or connected views.
 - YouTube likes and comments share `likes` and `comments`; video count is `posts_total`.
+- **X** and **Bluesky**: followers share `audience_size`, likes and replies share `likes` and
+  `comments`; reposts are `shares` in class `reposts` (not comparable with Meta shares); quote posts
+  are `quotes`. X post counts (`x_tweet_count`) and Bluesky post counts (`bsky_posts_count`) include
+  replies, so they are not `posts_total`. X bookmarks are `saves` in class `x_bookmarks`, and X
+  impressions, shown on X as views, are `views` in class `x_public_views`, never compared with other
+  platforms' views. Bluesky has no views at all.
 - A metric with no mapping, such as an imported LinkedIn impression, gets the class
   `<platform>:<metric>` and is only compared within that platform.
 

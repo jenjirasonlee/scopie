@@ -1,14 +1,19 @@
+import { ENGAGEMENT_AGE_DAYS } from '@/lib/analytics/engagement';
+import { platformName } from '@/lib/analytics/names';
 import type { Json, Tables } from '@/lib/db/types';
 import { ingest, type IngestResult } from '@/lib/ingest/ingest';
 import { AuthError, PlatformError, RateLimitError } from '@/lib/platforms/errors';
 import type {
   PublicContext,
+  PublicObservation,
   PublicPostPage,
   PublicProfile,
   PublicProfileCollector,
+  PublicReadPlan,
 } from '@/lib/platforms/types';
 import type { EngineDeps } from './engine';
 import {
+  BILLED_FIRST_READ_DAYS,
   MAX_PAGES,
   PUBLIC_BACKFILL_MONTHS,
   PUBLIC_USAGE_PAUSE_PERCENT,
@@ -22,6 +27,12 @@ type SyncState = Tables<'sync_state'>;
 
 /** Public posts are re-measured until this age; older posts keep their last observation. */
 export const PUBLIC_REFRESH_DAYS = 31;
+
+/**
+ * Platforms billed per read (X) re-read a post only until it has a value at the fixed
+ * engagement age: 7 days plus the tolerance post_metrics_at_age allows (15%).
+ */
+export const BILLED_RECHECK_HOURS = Math.floor(ENGAGEMENT_AGE_DAYS * 24 * 1.15);
 
 export type PublicJobLog = {
   count(result: IngestResult): void;
@@ -220,19 +231,107 @@ class PublicJob {
   }
 
   private async profileDaily() {
+    const plan = this.collector.billedPerRead ? await this.readPlan() : undefined;
     const capturedAt = this.now().toISOString();
     const observation = await this.collector.observeProfile(
       this.ctx,
       this.handle,
       isoDay(this.now()),
+      plan,
     );
     await this.checkIdentity(observation.profile);
     await this.write({ accountMetrics: observation.accountMetrics }, capturedAt);
+    await this.removePosts(observation.removedPostIds ?? []);
     await this.storePage(observation.firstPage, capturedAt);
+    if (plan) await this.recordHistoryStart(plan, observation);
     await this.recordProfile(observation.profile, capturedAt);
     await this.markObserved(capturedAt);
     // The observation is complete, so the run succeeds; only the jobs after it wait.
     this.nearLimit = (this.collector.appUsage ?? 0) >= PUBLIC_USAGE_PAUSE_PERCENT;
+  }
+
+  /**
+   * For a platform billed per read (X): read only posts newer than the newest stored one,
+   * and re-read stored posts that are due a snapshot until they have their 7-day value,
+   * oldest first (a missed 7-day value can't be read later).
+   */
+  private async readPlan(): Promise<PublicReadPlan> {
+    const now = this.now().getTime();
+    const posts = () =>
+      this.db
+        .from('posts')
+        .select('external_id, published_at')
+        .eq('social_account_id', this.account.id)
+        .eq('data_source', 'live_public')
+        .is('removed_at', null);
+    const { data: newest, error } = await posts()
+      .order('published_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`Could not read posts: ${error.message}`);
+    const { data: recent, error: recentError } = await posts()
+      .gte('published_at', new Date(now - BILLED_RECHECK_HOURS * 3600_000).toISOString())
+      .order('published_at', { ascending: true });
+    if (recentError) throw new Error(`Could not read posts: ${recentError.message}`);
+    const last = await this.lastPublicCapture(recent.map((post) => post.external_id));
+    const recheckIds = recent
+      .filter((post) => {
+        const published = Date.parse(post.published_at);
+        const lastAt = last.get(post.external_id);
+        return isSnapshotDue(
+          (now - published) / 3600_000,
+          lastAt ? (Date.parse(lastAt) - published) / 3600_000 : null,
+        );
+      })
+      .map((post) => post.external_id);
+    return {
+      sinceId: newest?.external_id ?? null,
+      startTime: new Date(now - BILLED_FIRST_READ_DAYS * 86_400_000).toISOString(),
+      recheckIds,
+    };
+  }
+
+  /**
+   * Deletes posts the platform no longer returns, with their metrics (X's developer terms:
+   * content deleted on X is deleted here too).
+   */
+  private async removePosts(externalIds: string[]) {
+    if (!externalIds.length) return;
+    const { error } = await this.db
+      .from('posts')
+      .delete()
+      .eq('social_account_id', this.account.id)
+      .in('external_id', externalIds);
+    if (error) throw new Error(`Could not delete removed posts: ${error.message}`);
+    this.log.event(
+      'info',
+      'posts_removed',
+      `${externalIds.length} post${externalIds.length === 1 ? ' was' : 's were'} deleted or hidden on ${platformName(this.account.platform_key)}, so Scopie deleted ${externalIds.length === 1 ? 'it' : 'them'} too.`,
+    );
+  }
+
+  /**
+   * earliest_post_at for a platform billed per read: set from the first read, and moved
+   * forward when the per-run cap left posts unread, so a gap is never counted as "no posts".
+   */
+  private async recordHistoryStart(plan: PublicReadPlan, observation: PublicObservation) {
+    const from = observation.completeFrom;
+    if (!from) return;
+    const first = !this.account.earliest_post_at;
+    if (!first && !plan.sinceId) return;
+    if (!first) {
+      this.log.event(
+        'warning',
+        'posts_capped',
+        'More new posts than Scopie reads in one day; post history now counts from the oldest one read.',
+      );
+    }
+    const { error } = await this.db
+      .from('social_accounts')
+      .update({ earliest_post_at: from })
+      .eq('id', this.account.id);
+    if (error) throw new Error(`Could not record the post history start: ${error.message}`);
+    this.account.earliest_post_at = from;
   }
 
   private async markObserved(capturedAt: string) {
@@ -259,7 +358,7 @@ class PublicJob {
       this.account.external_id = profile.externalId;
     } else if (this.account.external_id !== profile.externalId) {
       throw new PlatformError(
-        `@${this.handle} now belongs to a different Instagram account. Check the username; no data was stored.`,
+        `@${this.handle} now belongs to a different ${platformName(this.account.platform_key)} account. Check the username; no data was stored.`,
         'profile_changed',
       );
     }
@@ -303,6 +402,8 @@ class PublicJob {
 
   /** Re-reads recent posts and stores a snapshot for each one that reached a capture age. */
   private async postsRefresh() {
+    // Billed per read (X): the daily observation re-reads what is due; nothing more is read.
+    if (this.collector.billedPerRead) return;
     const capturedAt = this.now().toISOString();
     const oldest = this.now().getTime() - PUBLIC_REFRESH_DAYS * 86_400_000;
     let cursor: string | null = null;
@@ -321,6 +422,11 @@ class PublicJob {
    */
   private async backfill() {
     if (this.state.completed) return;
+    if (this.collector.billedPerRead) {
+      // Older posts would be billed one by one; history starts at the first observation.
+      this.state.completed = true;
+      return;
+    }
     const saved =
       this.state.cursor &&
       typeof this.state.cursor === 'object' &&
