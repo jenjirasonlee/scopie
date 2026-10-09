@@ -89,7 +89,7 @@ const profile = (id: string, over: Partial<ProfileRecord> = {}): ProfileRecord =
 const follower = (at: Date, value: number | null): FollowerObservation => ({
   at: at.toISOString(),
   value,
-  availability: value === null ? 'not_observed' : 'available',
+  availability: value === null ? 'pending' : 'available',
   dataSource: 'demo',
 });
 
