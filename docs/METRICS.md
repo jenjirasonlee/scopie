@@ -155,3 +155,18 @@ Benchmarks (`lib/analytics/benchmark.ts`) rank profiles with the same rules as �
 - **Followers** is the last observation inside the period.
 - **Country vs country** shows medians with how many profiles each rests on; **period comparisons**
   use equal-length periods and only profiles with a value in both.
+
+## 8. Analytics explorer
+
+The Analytics page (`lib/analytics/explorer.ts`) compares stored posts published in a period:
+
+- **Latest stored value.** Each post's most recent lifetime value of the metric (`post_metrics_latest`),
+  of one data source. Newer posts have had less time to collect engagement; the basis sentence says
+  which value is used.
+- **Filters:** period, platform, country, profile role, format, pillar and campaign. **Compare by:**
+  country, profile, platform, format, pillar or campaign.
+- **Only comparable values.** Every value in a comparison must share metric key, comparability class
+  and data source (§5). Metrics that aren't comparable across the selected platforms aren't offered;
+  asked for directly, the comparison is refused with the reason and one platform at a time is offered.
+- **Unknown is not zero.** Posts without an `available` value (hidden by the owner, not applicable,
+  not stored…) are left out and counted by reason. Groups need at least 5 posts for a median and mean.
