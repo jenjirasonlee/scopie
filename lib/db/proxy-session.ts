@@ -42,10 +42,11 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // getUser() validates the token with Supabase Auth; do not trust getSession() here.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the token's signature (locally when the project signs with asymmetric
+  // keys, otherwise with Supabase Auth); do not trust getSession() here. Pages still call
+  // getUser() themselves.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub ? data.claims : null;
 
   const { pathname } = request.nextUrl;
 
