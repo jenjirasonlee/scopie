@@ -168,3 +168,32 @@ export async function failStaleRuns(db: Db, now: Date = new Date()): Promise<voi
     .lt('started_at', cutoff);
   if (error) throw new Error(`Could not clean up stale runs: ${error.message}`);
 }
+
+/**
+ * Makes a platform's never-read public profiles due now. Called when an organization chooses
+ * its viewer account, so profiles added before that are read on the next tick instead of
+ * waiting out a failed attempt's interval.
+ */
+export async function releaseSetupBlockedJobs(
+  db: Db,
+  organizationId: string,
+  platformKey: string,
+): Promise<void> {
+  const { data: accounts, error } = await db
+    .from('social_accounts')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('platform_key', platformKey);
+  if (error) throw new Error(`Could not list profiles: ${error.message}`);
+  if (!accounts.length) return;
+  const { error: updateError } = await db
+    .from('sync_state')
+    .update({ last_attempt_at: null, next_run_after: null })
+    .in(
+      'social_account_id',
+      accounts.map((account) => account.id),
+    )
+    .in('job_type', [...PUBLIC_JOBS])
+    .is('last_success_at', null);
+  if (updateError) throw new Error(`Could not reset sync state: ${updateError.message}`);
+}

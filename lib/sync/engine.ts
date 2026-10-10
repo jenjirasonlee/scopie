@@ -49,6 +49,8 @@ export type RunOutcome = {
 };
 
 const MAX_EVENTS_PER_RUN = 100;
+/** Public-job failures that mean "not set up yet", not "the platform failed". */
+const SETUP_MISSING_CODES = new Set(['no_viewer', 'no_api_key']);
 
 class RunLog {
   processed = 0;
@@ -256,6 +258,15 @@ async function handleFailure(
       failed: log.failed,
       errorCode: code,
     };
+  }
+
+  if (isPublicJob(run.job_type) && SETUP_MISSING_CODES.has(code)) {
+    // Nothing was tried against the platform: the org has no viewer account or the server has
+    // no key yet. The scheduler only queues these jobs once that is set up, so leave the job
+    // due rather than waiting out its interval (a day for the daily observation).
+    state.last_attempt_at = null;
+    state.next_run_after = null;
+    return { status: 'failed', processed: log.processed, failed: log.failed, errorCode: code };
   }
 
   state.consecutive_failures += 1;
