@@ -144,12 +144,10 @@ Meta apps have two access levels, **Standard Access** and **Advanced Access**.
 
 - With Standard Access, an app works for people who have a role on the app (admin, developer,
   tester). You have that role because you created the app.
-- **It is not yet certain** whether Standard Access is enough to look up competitor accounts, which
-  have no role on your app. Meta's documentation suggests it is, because the request runs through
-  your own viewer account. This will be confirmed on the first live test.
-- If it turns out not to be enough, the app needs **Advanced Access**, which means Meta's **App
-  Review** and possibly **Business Verification**. That takes extra time and is done in the Meta
-  developer dashboard.
+- **Standard Access is enough** to look up competitor accounts, even though they have no role on
+  your app, because the request runs through your own viewer account. Verified live on
+  2026-10-10: looking up "nike" returned its followers, posts and bio with Standard Access only, no
+  App Review.
 - A Scopie installation that serves other companies would need Advanced Access in any case.
 
 Meta's own pages:

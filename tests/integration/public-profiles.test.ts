@@ -10,7 +10,7 @@ import type {
 } from '@/lib/platforms/types';
 import { loadAccountContext, loadPublicContext } from '@/lib/sync/credentials';
 import { runSyncJob, type EngineDeps } from '@/lib/sync/engine';
-import { enqueueDueJobs, processQueue } from '@/lib/sync/scheduler';
+import { enqueueDueJobs, processQueue, releaseSetupBlockedJobs } from '@/lib/sync/scheduler';
 import {
   addMember,
   adminClient,
@@ -222,6 +222,20 @@ describe('public profiles', () => {
     expect(queued).toBe(0);
     expect(count).toBe(0);
   });
+
+  it('stay due after a read that failed only because no viewer was chosen yet', async () => {
+    const runId = await queue('public_profile_daily');
+    const outcome = await runSyncJob(deps(new FakeCollector(), '2026-10-07T05:00:00Z'), runId);
+    expect(outcome).toMatchObject({ status: 'failed', errorCode: 'no_viewer' });
+    const { data } = await admin
+      .from('sync_state')
+      .select('last_attempt_at, next_run_after, consecutive_failures')
+      .eq('social_account_id', competitorId)
+      .eq('job_type', 'public_profile_daily')
+      .single();
+    expect(data).toEqual({ last_attempt_at: null, next_run_after: null, consecutive_failures: 0 });
+    await admin.from('sync_runs').delete().eq('social_account_id', competitorId);
+  });
 });
 
 describe('viewer account', () => {
@@ -239,6 +253,26 @@ describe('viewer account', () => {
     expect(error).toBeNull();
     const { data } = await viewer.client.from('public_data_viewers').select('platform_key');
     expect(data).toEqual([{ platform_key: 'instagram' }]);
+  });
+
+  it('makes profiles that were never read due again once chosen', async () => {
+    // A failed attempt from before the viewer existed, saved with a day-long wait.
+    await admin.from('sync_state').upsert({
+      social_account_id: competitorId,
+      organization_id: orgId,
+      job_type: 'public_posts_refresh',
+      last_attempt_at: '2026-10-07T05:00:00Z',
+      next_run_after: '2026-10-08T05:00:00Z',
+      consecutive_failures: 1,
+    });
+    await releaseSetupBlockedJobs(admin, orgId, 'instagram');
+    const { data } = await admin
+      .from('sync_state')
+      .select('last_attempt_at, next_run_after')
+      .eq('social_account_id', competitorId)
+      .eq('job_type', 'public_posts_refresh')
+      .single();
+    expect(data).toEqual({ last_attempt_at: null, next_run_after: null });
   });
 
   it('cannot be written directly', async () => {

@@ -10,6 +10,7 @@ import { formDataToObject, type FormState } from '@/lib/forms';
 import { getOrgContext } from '@/lib/orgs/queries';
 import { PlatformError, RateLimitError } from '@/lib/platforms/errors';
 import { createPublicCollector, needsViewer } from '@/lib/platforms/registry';
+import { releaseSetupBlockedJobs } from '@/lib/sync/scheduler';
 import { metaConfig, publicApiCredential, serverEnv } from '@/lib/server-env';
 import { loadPublicContext } from '@/lib/sync/credentials';
 import {
@@ -38,7 +39,7 @@ export async function setPublicDataViewer(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { role } = await getOrgContext(orgSlug);
+  const { org, role } = await getOrgContext(orgSlug);
   if (!can(role, 'accounts.manage')) return { status: 'error', message: NO_PERMISSION };
   const supabase = await createClient();
   const { error } = await supabase.rpc('set_public_data_viewer', {
@@ -50,6 +51,8 @@ export async function setPublicDataViewer(
       message: error.code === '23514' ? `${error.message}.` : 'Could not save the viewer account.',
     };
   }
+  // Profiles added before the viewer was chosen are read on the next sync, not a day later.
+  await releaseSetupBlockedJobs(createAdminClient(), org.id, 'instagram');
   revalidatePath(`/${orgSlug}`, 'layout');
   return {
     status: 'success',
