@@ -4,6 +4,7 @@ import type { BenchmarkProfileData } from './benchmark';
 import { comparisonSource, postSources } from './compare';
 import { buildDashboard, type DashboardModel } from './dashboard';
 import { ENGAGEMENT_AGE_DAYS } from './engagement';
+import { buildMarketerView, type MarketerView, type ObservedPost } from './marketer';
 import { DAY_MS, observationTime, periodsFor } from './range';
 import type {
   FollowerObservation,
@@ -31,6 +32,7 @@ export async function fetchAll<T>(
 
 export type DashboardData = {
   model: DashboardModel;
+  marketer: MarketerView;
   hasViewer: boolean;
   countriesMissing: number;
 };
@@ -44,30 +46,39 @@ export async function loadDashboard(input: {
   orgId: string;
   orgSlug: string;
   isDemoOrg: boolean;
+  timeZone: string;
+  platformKey: string | null;
   days: number;
   now: Date;
 }): Promise<DashboardData> {
   const supabase = await createClient();
   const source = comparisonSource(input.isDemoOrg);
-  const { previous } = periodsFor(input.now, input.days);
+  const periods = periodsFor(input.now, input.days);
   // Earliest instant any number on the page needs: the previous period, shifted back for
   // posts measured at 7 days.
-  const since = new Date(previous.start.getTime() - ENGAGEMENT_AGE_DAYS * DAY_MS);
+  const since = new Date(periods.previous.start.getTime() - ENGAGEMENT_AGE_DAYS * DAY_MS);
   const sinceDate = since.toISOString().slice(0, 10);
 
-  const [accounts, viewers] = await Promise.all([
-    supabase
-      .from('social_accounts')
-      .select(
-        'id, display_name, handle, platform_key, business_role, access_type, country_code, is_active, first_observed_at, last_observed_at, earliest_post_at',
-      )
-      .eq('organization_id', input.orgId)
-      .order('display_name'),
-    supabase
-      .from('public_data_viewers')
-      .select('id', { count: 'exact', head: true })
-      .eq('organization_id', input.orgId),
-  ]);
+  // Every read at once: the database is a round trip away, so they must not wait on each other.
+  const [accounts, viewers, followers, posts, snapshots, metricsAtAge, latestMetrics] =
+    await Promise.all([
+      supabase
+        .from('social_accounts')
+        .select(
+          'id, display_name, handle, platform_key, business_role, access_type, country_code, is_active, first_observed_at, last_observed_at, earliest_post_at',
+        )
+        .eq('organization_id', input.orgId)
+        .order('display_name'),
+      supabase
+        .from('public_data_viewers')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', input.orgId),
+      loadFollowers(supabase, input.orgId, source, sinceDate),
+      loadPosts(supabase, input.orgId, input.isDemoOrg, since),
+      loadSnapshots(supabase, input.orgId, source),
+      loadMetricsAtAge(supabase, input.orgId, source, since),
+      loadLatestEngagement(supabase, input.orgId, source, periods.current.start),
+    ]);
   if (accounts.error) throw accounts.error;
   if (viewers.error) throw viewers.error;
 
@@ -85,12 +96,9 @@ export async function loadDashboard(input: {
     earliestPostAt: a.earliest_post_at,
   }));
 
-  const [followers, posts, snapshots] = await Promise.all([
-    loadFollowers(supabase, input.orgId, source, sinceDate),
-    loadPosts(supabase, input.orgId, input.isDemoOrg, since),
-    loadSnapshots(supabase, input.orgId, source),
-  ]);
-  await attachMetricsAtAge(supabase, input.orgId, source, since, posts);
+  // Copies with the latest likes and comments, before the 7-day values are attached.
+  const observed = observedPosts(posts, latestMetrics);
+  attachMetricsAtAge(posts, metricsAtAge);
 
   return {
     model: buildDashboard({
@@ -103,9 +111,59 @@ export async function loadDashboard(input: {
       posts,
       snapshots,
     }),
+    marketer: buildMarketerView({
+      period: periods.current,
+      timeZone: input.timeZone,
+      profiles,
+      followers,
+      posts: observed,
+      platformKey: input.platformKey,
+    }),
     hasViewer: (viewers.count ?? 0) > 0,
     countriesMissing: profiles.filter((p) => p.isActive && !p.countryCode).length,
   };
+}
+
+/** The latest likes and comments Scopie read for posts, with the post's age at that read. */
+function loadLatestEngagement(
+  supabase: ServerClient,
+  orgId: string,
+  source: ReturnType<typeof comparisonSource>,
+  since: Date,
+) {
+  return fetchAll((from, to) =>
+    supabase
+      .from('post_metrics_latest')
+      .select('post_id, metric_key, value, availability, data_source, post_age_hours')
+      .eq('organization_id', orgId)
+      .eq('data_source', source)
+      .in('metric_key', ['likes', 'comments'])
+      .gte('captured_at', since.toISOString())
+      .order('post_id')
+      .order('metric_key')
+      .range(from, to),
+  );
+}
+
+function observedPosts(
+  posts: readonly PostRecord[],
+  rows: Awaited<ReturnType<typeof loadLatestEngagement>>,
+): ObservedPost[] {
+  const byId = new Map<string, ObservedPost>(
+    posts.map((p) => [p.id, { ...p, likes: undefined, comments: undefined, ageHours: null }]),
+  );
+  for (const row of rows) {
+    const post = row.post_id ? byId.get(row.post_id) : undefined;
+    if (!post || !row.availability || !row.data_source) continue;
+    const value = { value: row.value, availability: row.availability, dataSource: row.data_source };
+    if (row.metric_key === 'likes') post.likes = value;
+    if (row.metric_key === 'comments') post.comments = value;
+    // Likes and comments are read together; keep the younger age if they ever differ.
+    if (row.post_age_hours !== null)
+      post.ageHours =
+        post.ageHours === null ? row.post_age_hours : Math.min(post.ageHours, row.post_age_hours);
+  }
+  return [...byId.values()];
 }
 
 async function loadFollowers(
@@ -176,16 +234,13 @@ async function loadPosts(
 }
 
 /** Likes and comments at 7 days old, of the comparison source only. */
-async function attachMetricsAtAge(
+function loadMetricsAtAge(
   supabase: ServerClient,
   orgId: string,
   source: ReturnType<typeof comparisonSource>,
   since: Date,
-  posts: PostRecord[],
 ) {
-  if (!posts.length) return;
-  const byId = new Map(posts.map((p) => [p.id, p]));
-  const rows = await fetchAll((from, to) =>
+  return fetchAll((from, to) =>
     supabase
       .from('post_metrics_at_age')
       .select('post_id, metric_key, value, availability, data_source')
@@ -198,6 +253,13 @@ async function attachMetricsAtAge(
       .order('metric_key')
       .range(from, to),
   );
+}
+
+function attachMetricsAtAge(
+  posts: PostRecord[],
+  rows: Awaited<ReturnType<typeof loadMetricsAtAge>>,
+) {
+  const byId = new Map(posts.map((p) => [p.id, p]));
   for (const row of rows) {
     const post = row.post_id ? byId.get(row.post_id) : undefined;
     if (!post || !row.availability || !row.data_source) continue;
@@ -281,11 +343,12 @@ export async function loadBenchmarkData(input: {
     earliestPostAt: a.earliest_post_at,
   }));
 
-  const [followers, posts] = await Promise.all([
+  const [followers, posts, metricsAtAge] = await Promise.all([
     loadFollowers(supabase, input.orgId, source, previous.start.toISOString().slice(0, 10)),
     loadPosts(supabase, input.orgId, input.isDemoOrg, since),
+    loadMetricsAtAge(supabase, input.orgId, source, since),
   ]);
-  await attachMetricsAtAge(supabase, input.orgId, source, since, posts);
+  attachMetricsAtAge(posts, metricsAtAge);
 
   const postsByAccount = new Map<string, PostRecord[]>();
   for (const post of posts) {

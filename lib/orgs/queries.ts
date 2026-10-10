@@ -39,20 +39,17 @@ export const listMyOrganizations = cache(async (): Promise<MyOrganization[]> => 
 export const getOrgContext = cache(async (slug: string): Promise<OrgContext> => {
   const user = await requireUser();
   const supabase = await createClient();
-  const { data: org, error } = await supabase
+  // One round trip: the organization and the user's membership in it.
+  const { data, error } = await supabase
     .from('organizations')
-    .select('*')
+    .select('*, organization_members!inner(role)')
     .eq('slug', slug)
+    .eq('organization_members.user_id', user.id)
     .maybeSingle();
   if (error) throw error;
-  if (!org) notFound();
-
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('role')
-    .eq('organization_id', org.id)
-    .eq('user_id', user.id)
-    .maybeSingle();
+  if (!data) notFound();
+  const { organization_members: memberships, ...org } = data;
+  const membership = memberships[0];
   if (!membership) notFound();
 
   return { user, org, role: membership.role };

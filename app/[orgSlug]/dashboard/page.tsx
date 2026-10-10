@@ -3,23 +3,18 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { GettingStarted, type ChecklistItem } from '@/components/dashboard/getting-started';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
-import { RangeFilter } from '@/components/dashboard/range-filter';
+import { PlatformFilter, RangeFilter } from '@/components/dashboard/range-filter';
 import {
-  ComparisonTable,
-  FollowerTrend,
-  GroupComparison,
-  Hashtags,
-  PostingFrequency,
-  Tiles,
-  TopEngagement,
-  TopPosts,
-} from '@/components/dashboard/sections';
+  CompareTable,
+  Headlines,
+  WhatWorks,
+  WinningPosts,
+} from '@/components/dashboard/marketer-sections';
 import { DataSourceBadge } from '@/components/pipeline/data-source-badge';
 import { PageHeader } from '@/components/shared/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { listCountries } from '@/lib/accounts/queries';
 import { loadDashboard } from '@/lib/analytics/queries';
 import { formatPeriod, parseRangeParam } from '@/lib/analytics/range';
 import { can } from '@/lib/auth/permissions';
@@ -40,11 +35,15 @@ export default async function DashboardPage({
   const canManage = can(role, 'accounts.manage');
   // getOrgContext has already read request data, so the current time is per request.
   const now = new Date();
-  const [{ model, hasViewer, countriesMissing }, countries] = await Promise.all([
-    loadDashboard({ orgId: org.id, orgSlug, isDemoOrg: org.is_demo, days, now }),
-    listCountries(),
-  ]);
-  const countryNames = new Map(countries.map((c) => [c.code, c.name]));
+  const { model, marketer, hasViewer, countriesMissing } = await loadDashboard({
+    orgId: org.id,
+    orgSlug,
+    isDemoOrg: org.is_demo,
+    timeZone: org.default_timezone,
+    platformKey: typeof search.platform === 'string' ? search.platform : null,
+    days,
+    now,
+  });
 
   const checklist: ChecklistItem[] = [
     {
@@ -82,7 +81,7 @@ export default async function DashboardPage({
       description={
         org.is_demo
           ? `${org.name}. Everything below is DEMO DATA generated for testing; none of it is real.`
-          : `Public social intelligence for ${org.name}, from what Scopie has actually observed.`
+          : 'How your profiles compare with the ones you watch, and what is working for them.'
       }
       actions={
         canManage ? (
@@ -133,13 +132,21 @@ export default async function DashboardPage({
       {header}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <RangeFilter orgSlug={orgSlug} days={days} />
+        <RangeFilter orgSlug={orgSlug} days={days} platform={marketer.platformKey} />
+        <PlatformFilter
+          orgSlug={orgSlug}
+          days={days}
+          platforms={marketer.platforms}
+          current={marketer.platformKey}
+        />
         <p className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
           {formatPeriod(model.periods.current)} · compared on
           <DataSourceBadge source={model.source} />
           data
         </p>
       </div>
+
+      <GettingStarted items={checklist} />
 
       {!model.hasAnyObservation ? (
         <Alert variant="info">
@@ -165,29 +172,28 @@ export default async function DashboardPage({
         </Alert>
       ) : null}
 
-      <Tiles model={model} />
+      <Headlines view={marketer} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <InsightsPanel insights={model.insights} periods={model.periods} />
-        <GettingStarted items={checklist} />
-      </div>
+      <CompareTable view={marketer} orgSlug={orgSlug} />
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <FollowerTrend model={model} orgSlug={orgSlug} />
-        <PostingFrequency model={model} orgSlug={orgSlug} />
-      </div>
+      <WinningPosts view={marketer} orgSlug={orgSlug} timeZone={org.default_timezone} />
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <TopEngagement model={model} orgSlug={orgSlug} />
-        <TopPosts model={model} orgSlug={orgSlug} />
+        <WhatWorks view={marketer} />
+        <InsightsPanel insights={model.insights.slice(0, 5)} periods={model.periods} />
       </div>
 
-      <ComparisonTable model={model} orgSlug={orgSlug} />
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <GroupComparison model={model} countryNames={countryNames} />
-        <Hashtags model={model} />
-      </div>
+      <p className="text-muted-foreground text-[13px]">
+        Want the detail behind these numbers? See{' '}
+        <Link href={`/${orgSlug}/benchmarks`} className="text-primary font-medium hover:underline">
+          Benchmarks
+        </Link>{' '}
+        for rankings and trends, or{' '}
+        <Link href={`/${orgSlug}/analytics`} className="text-primary font-medium hover:underline">
+          Analytics
+        </Link>{' '}
+        for every post.
+      </p>
     </div>
   );
 }
